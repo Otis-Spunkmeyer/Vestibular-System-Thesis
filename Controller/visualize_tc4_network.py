@@ -59,15 +59,15 @@ NODE_POSITIONS = {
     "deriv_out_cw":   (9.5, -3.5),
 
     # --- Stage 4: co-activation node (shared) ---
-    "coact_node": (11.0,  0.0),
+    "coact_node": (10.5,  0.0),
 
     # --- Stage 5: Kp gain stage ---
-    "kp_mod_ccw": (11.0,  6.0),  "kp_prod_ccw": (12.5,  6.0),
-    "kp_mod_cw":  (11.0, -6.0),  "kp_prod_cw":  (12.5, -6.0),
+    "kp_mod_ccw": (11.0,  7.0),  "kp_prod_ccw": (12.5,  7.0),
+    "kp_mod_cw":  (11.0, -7.0),  "kp_prod_cw":  (12.5, -7.0),
 
     # --- Stage 5: Kd gain stage ---
-    "kd_mod_ccw": (11.0,  3.5),  "kd_prod_ccw": (12.5,  3.5),
-    "kd_mod_cw":  (11.0, -3.5),  "kd_prod_cw":  (12.5, -3.5),
+    "kd_mod_ccw": (11.0,  4.5),  "kd_prod_ccw": (12.5,  4.5),
+    "kd_mod_cw":  (11.0, -4.5),  "kd_prod_cw":  (12.5, -4.5),
 
     # --- Stage 5: Kc gain stage ---
     "kc_mod_ccw": (11.0,  1.5),  "kc_prod_ccw": (12.5,  1.5),
@@ -77,8 +77,8 @@ NODE_POSITIONS = {
     "ib_input": (14.0,  0.0),
 
     # --- Stage 5: Kt gain stage ---
-    "kt_mod_ccw": (14.0,  3.5),  "kt_prod_ccw": (15.5,  3.5),
-    "kt_mod_cw":  (14.0, -3.5),  "kt_prod_cw":  (15.5, -3.5),
+    "kt_mod_ccw": (14.0,  4.5),  "kt_prod_ccw": (15.5,  4.5),
+    "kt_mod_cw":  (14.0, -4.5),  "kt_prod_cw":  (15.5, -4.5),
 
     # --- Stage 7: bilateral motor output ---
     "ta_ccw": (17.0,  3.5),
@@ -175,14 +175,14 @@ BACKGROUND_REGIONS = [
      "Differential\nCalculations", -5.5),
 
     # Derivative Gain Circuits — light blue
-    (10.2, -6.8, 6.0, 13.6,
+    (10.2, -7.8, 6.0, 15.6,
      "#D6EAF8", "#2E86C1",
-     "Derivative Gain Circuits", -6.5),
+     "Derivative Gain Circuits", -7.5),
 
     # Type Ib feedback sub-zone — light gray
-    (13.2, -4.2, 3.0, 8.4,
+    (13.2, -5.5, 3.0, 11.0,
      "#E8E8E8", "#7F8C8D",
-     "Type Ib\nfeedback", -3.8),
+     "Type Ib\nfeedback", 5.3),
 ]
 
 # =====================================================================
@@ -239,7 +239,7 @@ def draw_network(neurons, synapses, output_file=None):
     if output_file is None:
         output_file = os.path.join(SCRIPT_DIR, "tc4_network_diagram.png")
 
-    fig, ax = plt.subplots(figsize=(22, 14))
+    fig, ax = plt.subplots(figsize=(24, 16))
     ax.set_facecolor("white")
     fig.patch.set_facecolor("white")
 
@@ -288,13 +288,7 @@ def draw_network(neurons, synapses, output_file=None):
 
         # Slight curve for connections that would otherwise overlap
         rad = 0.0
-        if syn.pre == "deriv_out_ccw" and syn.post == "coact_node":
-            rad = -0.25
-        elif syn.pre == "deriv_out_cw" and syn.post == "coact_node":
-            rad =  0.25
-        elif "coact" in syn.pre and "kc_prod" in syn.post:
-            rad = 0.15 if "ccw" in syn.post else -0.15
-        elif syn.pre == "ib_input":
+        if syn.pre == "ib_input":
             rad = 0.15 if "ccw" in syn.post else -0.15
 
         _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=rad)
@@ -310,8 +304,8 @@ def draw_network(neurons, synapses, output_file=None):
 
     # --- Gain stage group labels (matching M&H's Kp, Kc, Kd, Kt labels) ---
     gain_label_positions = {
-        "Kp": (11.75,  6.55),  "Kd": (11.75,  4.05),
-        "Kc": (11.75,  2.05),  "Kt": (14.75,  4.05),
+        "Kp": (11.75,  7.6),   "Kd": (11.75,  5.1),
+        "Kc": (11.75,  2.05),  "Kt": (14.75,  5.1),
     }
     for label, (lx, ly) in gain_label_positions.items():
         ax.text(lx, ly, label,
@@ -363,7 +357,7 @@ def draw_network(neurons, synapses, output_file=None):
     )
 
     ax.set_xlim(-1.5, 19.5)
-    ax.set_ylim(-7.5, 7.5)
+    ax.set_ylim(-8.5, 8.5)
     ax.set_aspect("equal")
     ax.axis("off")
 
