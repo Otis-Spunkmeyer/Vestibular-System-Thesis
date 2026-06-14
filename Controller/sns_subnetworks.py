@@ -5,14 +5,48 @@ R       =  20.0   # mV  operating range
 Ehi     = Er + R  # -40.0 mV
 Elo     = Er      # -60.0 mV
 
-gs_exc  =  0.115  # µS
+gs_exc  =  0.115  # µS  (≈ unity gain at mid-range)
 Es_exc  =  134.0  # mV
 
 gs_inh  =  0.558  # µS
 Es_inh  = -100.0  # mV
 
+GM_DEFAULT = 1.0  # µS, membrane conductance used by make_neuron
+
 def make_neuron(name):
-    return Neuron(Cm_nF=5.0, Gm_uS=1.0, Er_mV=Er, name=name)
+    return Neuron(Cm_nF=5.0, Gm_uS=GM_DEFAULT, Er_mV=Er, name=name)
+
+# Transmission subnetwork
+# Two-neuron path where U_post ≈ target_gain × U_pre at steady state.
+# gs_max is derived analytically using the FSA design formula (Hilts 2018):
+#   At steady state with U_pre as the presynaptic activation:
+#   U_post = (gs_max/R × U_pre × (Es-Er)) / (Gm + gs_max/R × U_pre)
+#   Solving for gs_max at the mid-range operating point U_pre = R/2:
+#   gs_max = target_gain × Gm × R / ((Es - Er) - target_gain × (R/2))
+# Valid for target_gain ∈ (0, 1).
+def make_transmission_network(target_gain, name_prefix="trans"):
+    """
+    Build a two-neuron transmission subnetwork.
+
+    Args:
+        target_gain:  Desired steady-state gain U_post / U_pre (between 0 and 1).
+        name_prefix:  String prefix for neuron and synapse names.
+
+    Returns:
+        trans_pre, trans_post, syn
+    """
+    driving_force_mv = Es_exc - Er                  # 194 mV
+    gs_transmission  = (target_gain * GM_DEFAULT * R) / (driving_force_mv - target_gain * (R / 2.0))
+
+    trans_pre  = make_neuron(f"{name_prefix}_pre")
+    trans_post = make_neuron(f"{name_prefix}_post")
+    syn = Synapse(
+        gs_transmission, Es_exc, Elo, Ehi,
+        name=f"{name_prefix}_pre_to_post",
+        pre=f"{name_prefix}_pre",
+        post=f"{name_prefix}_post"
+    )
+    return trans_pre, trans_post, syn
 
 # Addition subnetwork
 # takes two input signals a and b encoded as applied currents
