@@ -33,8 +33,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # =====================================================================
 NODE_POSITIONS = {
     # --- Stage 1: bilateral inputs ---
-    "bs_ccw": (0.5,  4.5),   "bs_cw":  (0.5, -4.5),
-    "ss_ccw": (0.5,  2.5),   "ss_cw":  (0.5, -2.5),
+    "bs_ccw":        (0.5,  4.5),   "bs_cw":        (0.5, -4.5),
+    "ss_ccw":        (0.5,  2.5),   "ss_cw":        (0.5, -2.5),
+    "theta_ref_ccw": (0.5,  6.5),   "theta_ref_cw": (0.5, -6.5),
 
     # --- Stage 2: TC4 sensory integration (CCW) ---
     "sub_diff_ccw": (2.5,  5.0),
@@ -49,14 +50,16 @@ NODE_POSITIONS = {
     "error_cw":     (5.5, -3.5),
 
     # --- Stage 3: derivative estimation (CCW) ---
-    "deriv_fast_ccw": (7.5,  5.0),
-    "deriv_slow_ccw": (7.5,  2.5),
-    "deriv_out_ccw":  (9.5,  3.5),
+    "deriv_fast_ccw": (7.5,  5.5),
+    "deriv_slow_ccw": (7.5,  3.0),
+    "d_accel_ccw":    (9.5,  5.0),
+    "d_decel_ccw":    (9.5,  2.5),
 
     # --- Stage 3: derivative estimation (CW) ---
-    "deriv_fast_cw":  (7.5, -2.5),
-    "deriv_slow_cw":  (7.5, -5.0),
-    "deriv_out_cw":   (9.5, -3.5),
+    "deriv_fast_cw":  (7.5, -3.0),
+    "deriv_slow_cw":  (7.5, -5.5),
+    "d_accel_cw":     (9.5, -2.5),
+    "d_decel_cw":     (9.5, -5.0),
 
     # --- Stage 4: co-activation node (shared) ---
     "coact_node": (10.5,  0.0),
@@ -91,13 +94,15 @@ NODE_POSITIONS = {
 NODE_LABELS = {
     "bs_ccw": "BS+", "bs_cw": "BS−",
     "ss_ccw": "SS+", "ss_cw": "SS−",
+    "theta_ref_ccw": "θref+", "theta_ref_cw": "θref−",
     "sub_diff_ccw": "BS−SS+", "sub_diff_cw": "BS−SS−",
     "wg_ccw": "Wg·BS+",      "wg_cw": "Wg·BS−",
     "wp_ccw": "Wp·ΔΘ+",      "wp_cw": "Wp·ΔΘ−",
     "error_ccw": "e+",        "error_cw": "e−",
     "deriv_fast_ccw": "fast+", "deriv_fast_cw": "fast−",
     "deriv_slow_ccw": "slow+", "deriv_slow_cw": "slow−",
-    "deriv_out_ccw": "d+",    "deriv_out_cw": "d−",
+    "d_accel_ccw": "d_a+", "d_accel_cw": "d_a−",
+    "d_decel_ccw": "d_d+", "d_decel_cw": "d_d−",
     "coact_node": "|d|",
     "kp_mod_ccw": "bp+", "kp_mod_cw": "bp−",
     "kp_prod_ccw": "Kp+", "kp_prod_cw": "Kp−",
@@ -118,6 +123,7 @@ NODE_COLORS = {
     # Input — orange
     "bs_ccw": "#F39C12",  "bs_cw":  "#F39C12",
     "ss_ccw": "#F39C12",  "ss_cw":  "#F39C12",
+    "theta_ref_ccw": "#F39C12", "theta_ref_cw": "#F39C12",
 
     # TC4 sensory processing — light green  (NEW over McNeal & Hunt)
     "sub_diff_ccw": "#A9DFBF",  "sub_diff_cw": "#A9DFBF",
@@ -132,8 +138,9 @@ NODE_COLORS = {
     "deriv_slow_ccw": "#85C1E9",  "deriv_slow_cw": "#85C1E9",
 
     # Derivative output + co-activation — orange (matches M&H deriv output)
-    "deriv_out_ccw": "#F0A500",  "deriv_out_cw": "#F0A500",
-    "coact_node":    "#F0A500",
+    "d_accel_ccw": "#F0A500",  "d_accel_cw": "#F0A500",
+    "d_decel_ccw": "#F0A500",  "d_decel_cw": "#F0A500",
+    "coact_node":  "#F0A500",
 
     # Modulator neurons (bias-gated) — yellow (matches M&H Kp/Kc/Kd/Kt yellow)
     "kp_mod_ccw": "#F9E79F", "kp_mod_cw": "#F9E79F",
@@ -160,9 +167,9 @@ NODE_COLORS = {
 # =====================================================================
 BACKGROUND_REGIONS = [
     # TC4 Sensory Integration (new over McNeal & Hunt) — light green
-    (-0.2, -5.8, 6.6, 11.6,
+    (-0.2, -7.2, 6.6, 14.4,
      "#D5F5E3", "#27AE60",
-     "TC4 Sensory Integration\n(new over McNeal & Hunt)", -5.5),
+     "TC4 Sensory Integration\n(new over McNeal & Hunt)", -6.9),
 
     # Error formation sub-zone — slightly darker green, dashed
     (4.8, -4.2, 1.5, 8.4,
@@ -170,9 +177,9 @@ BACKGROUND_REGIONS = [
      "Error\nformation", 3.8),
 
     # Differential calculations — light bisque / tan
-    (6.8, -5.8, 3.4, 11.6,
+    (6.8, -6.2, 3.4, 12.4,
      "#FDEBD0", "#E67E22",
-     "Differential\nCalculations", -5.5),
+     "Differential\nCalculations", -5.9),
 
     # Derivative Gain Circuits — light blue
     (10.2, -7.8, 6.0, 15.6,
@@ -264,14 +271,14 @@ def draw_network(neurons, synapses, output_file=None):
     ax.text(-0.5, 4.0, "Active when\nBS is CCW (+)",
             ha="right", va="center", fontsize=8,
             style="italic", color="#555555")
-    ax.annotate("", xy=(-0.2, 5.5), xytext=(-0.2, 1.5),
+    ax.annotate("", xy=(-0.2, 7.0), xytext=(-0.2, 1.5),
                 arrowprops=dict(arrowstyle="-[,widthB=2.5", color="#555555", lw=1.2),
                 zorder=1)
 
     ax.text(-0.5, -4.0, "Active when\nBS is CW (−)",
             ha="right", va="center", fontsize=8,
             style="italic", color="#555555")
-    ax.annotate("", xy=(-0.2, -1.5), xytext=(-0.2, -5.5),
+    ax.annotate("", xy=(-0.2, -1.5), xytext=(-0.2, -7.0),
                 arrowprops=dict(arrowstyle="-[,widthB=2.5", color="#555555", lw=1.2),
                 zorder=1)
 
@@ -349,15 +356,15 @@ def draw_network(neurons, synapses, output_file=None):
     # --- Title ---
     ax.set_title(
         "TC4 SNS Controller  —  McNeal & Hunt 2026 architecture + TC4 dual-channel sensory integration\n"
-        f"38 neurons  |  46 synapses  "
-        r"$\bullet$  $e = -W_g \cdot BS - W_p \cdot (BS - SS)$  "
-        r"$\bullet$  split derivative: $K_d$ (directional) + $K_c$ (co-activation)  "
-        r"$\bullet$  $K_t$ = Type-Ib",
-        fontsize=10, pad=12,
+        r"42 neurons  |  56 synapses  "
+        r"$\bullet$  $e = \theta_{ref} - W_g \cdot BS - W_p \cdot (BS - SS)$  "
+        r"$\bullet$  split derivative: $K_d$ (directional, accel/decel) + $K_c$ (co-activation)  "
+        r"$\bullet$  $K_t$ = Type-Ib  $\bullet$  mod$\to$prod: inhibitory (FSA)",
+        fontsize=9, pad=12,
     )
 
     ax.set_xlim(-1.5, 19.5)
-    ax.set_ylim(-8.5, 8.5)
+    ax.set_ylim(-9.0, 9.0)
     ax.set_aspect("equal")
     ax.axis("off")
 

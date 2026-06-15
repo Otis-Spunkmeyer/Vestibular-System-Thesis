@@ -85,7 +85,7 @@ def make_multiplication_network():
     mul_prod = make_neuron("mul_prod") # neuron for output c
     syn1 = Synapse(gs_exc, Es_exc, Elo, Ehi, name="mul_pre1_to_prod", pre="mul_pre1", post="mul_prod") # synapse from pre1 to mul_prod (excitatory)
     syn2 = Synapse(gs_exc, Es_exc, Elo, Ehi, name="mul_pre2_to_mod", pre="mul_pre2", post="mul_mod") # synapse from pre2 to mul_mod (excitatory)
-    syn3 = Synapse(gs_exc, Es_exc, Elo, Ehi, name="mul_mod_to_prod", pre="mul_mod", post="mul_prod") # synapse from mul_mod to mul_prod (modulatory)
+    syn3 = Synapse(gs_inh, Es_inh, Elo, Ehi, name="mul_mod_to_prod", pre="mul_mod", post="mul_prod") # inhibitory per FSA multiplication (Szczecinski 2017, Fig. 4)
     return mul_pre1, mul_pre2, mul_mod, mul_prod, syn1, syn2, syn3
 
 # Division subnetwork

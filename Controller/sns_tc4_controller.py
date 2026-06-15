@@ -15,10 +15,10 @@ TC4 conditions (Peterka 2002, Table 2, 1-degree amplitude):
 Error signal:  e = -Wg * BS - Wp * (BS - SS)
 Torque:        Ta = (Kp + Kd * s) * e(t - tau_d)   [PD only, no integral]
 
-Network layout (38 neurons, 46 synapses):
-  Stage 1 — Bilateral input          (4  neurons)
+Network layout (42 neurons, 56 synapses):
+  Stage 1 — Bilateral input          (6  neurons)   [+2: theta_ref_ccw/cw]
   Stage 2 — TC4 sensory integration  (8  neurons)   <-- TC4 addition over McNeal & Hunt
-  Stage 3 — Derivative estimation    (6  neurons)
+  Stage 3 — Derivative estimation    (8  neurons)   [+2: d_decel_ccw/cw]
   Stage 4 — Co-activation |d(t)|     (1  neuron)
   Stage 5 — Bias-gated gain stages   (16 neurons)   Kp, Kd, Kc, Kt
   Stage 6 — Type-Ib input node       (1  neuron)
@@ -213,7 +213,7 @@ def build_tc4_network():
     # a CCW (positive) half and a CW (negative-magnitude) half before
     # entering the network.  Only one half is active at any instant.
     # ----------------------------------------------------------------
-    for name in ["bs_ccw", "bs_cw", "ss_ccw", "ss_cw"]:
+    for name in ["bs_ccw", "bs_cw", "ss_ccw", "ss_cw", "theta_ref_ccw", "theta_ref_cw"]:
         add_neuron(new_standard_neuron(name))
 
     # ----------------------------------------------------------------
@@ -250,28 +250,40 @@ def build_tc4_network():
         add_neuron(new_standard_neuron(f"wp_{side}"))
         add_synapse(f"sub_diff_{side}", f"wp_{side}", GS_WP, Es_exc)
 
-        # Addition: wg + wp  →  combined TC4 error
+        # Addition: theta_ref + wg + wp  →  combined TC4 error
         add_neuron(new_standard_neuron(f"error_{side}"))
-        add_synapse(f"wg_{side}", f"error_{side}", gs_exc, Es_exc)
-        add_synapse(f"wp_{side}", f"error_{side}", gs_exc, Es_exc)
+        add_synapse(f"theta_ref_{side}", f"error_{side}", gs_exc, Es_exc)
+        add_synapse(f"wg_{side}",        f"error_{side}", gs_exc, Es_exc)
+        add_synapse(f"wp_{side}",        f"error_{side}", gs_exc, Es_exc)
 
     # ----------------------------------------------------------------
     # Stage 3 — Derivative estimation  (McNeal & Hunt Eqs. 8-10)
-    # d(t) = v_fast - v_slow
-    # tau_fast = Cm_fast / Gm = 2 ms   (responds quickly to error changes)
-    # tau_slow = Cm_slow / Gm = 10 ms  (lags, so the difference is derivative)
-    # Both fast and slow neurons receive the same error signal.
-    # The output neuron computes the difference via excitatory/inhibitory synapses.
+    #
+    # Two output nodes per side represent the full signed derivative:
+    #   d_accel_{side} = fast - slow  (positive when error is accelerating)
+    #   d_decel_{side} = slow - fast  (positive when error is decelerating)
+    #
+    # Without d_decel, the SNS voltage would floor at Er when fast < slow,
+    # losing the returning-to-upright signal.  Both nodes are needed for:
+    #   - Kd: d_accel excitatory, d_decel inhibitory → signed directional derivative
+    #   - Kc: both excitatory to coact_node → |d| = accelerating + decelerating
     # ----------------------------------------------------------------
     for side in ["ccw", "cw"]:
         add_neuron(Neuron(Cm_nF=2.0,  Gm_uS=GM_DEFAULT, Er_mV=Er, name=f"deriv_fast_{side}"))
         add_neuron(Neuron(Cm_nF=10.0, Gm_uS=GM_DEFAULT, Er_mV=Er, name=f"deriv_slow_{side}"))
-        add_neuron(new_standard_neuron(f"deriv_out_{side}"))
+        add_neuron(new_standard_neuron(f"d_accel_{side}"))   # positive when accelerating
+        add_neuron(new_standard_neuron(f"d_decel_{side}"))   # positive when decelerating
 
         add_synapse(f"error_{side}",      f"deriv_fast_{side}", gs_exc, Es_exc)
         add_synapse(f"error_{side}",      f"deriv_slow_{side}", gs_exc, Es_exc)
-        add_synapse(f"deriv_fast_{side}", f"deriv_out_{side}",  gs_exc, Es_exc)
-        add_synapse(f"deriv_slow_{side}", f"deriv_out_{side}",  gs_inh, Es_inh)
+
+        # d_accel = fast - slow  (excit fast, inhib slow)
+        add_synapse(f"deriv_fast_{side}", f"d_accel_{side}", gs_exc, Es_exc)
+        add_synapse(f"deriv_slow_{side}", f"d_accel_{side}", gs_inh, Es_inh)
+
+        # d_decel = slow - fast  (excit slow, inhib fast)
+        add_synapse(f"deriv_slow_{side}", f"d_decel_{side}", gs_exc, Es_exc)
+        add_synapse(f"deriv_fast_{side}", f"d_decel_{side}", gs_inh, Es_inh)
 
     # ----------------------------------------------------------------
     # Stage 4 — Co-activation node:  |d(t)| ≈ deriv_out_ccw + deriv_out_cw
@@ -284,8 +296,10 @@ def build_tc4_network():
     #   x_c(t) = |d(t)|
     # ----------------------------------------------------------------
     add_neuron(new_standard_neuron("coact_node"))
-    add_synapse("deriv_out_ccw", "coact_node", gs_exc, Es_exc)
-    add_synapse("deriv_out_cw",  "coact_node", gs_exc, Es_exc)
+    add_synapse("d_accel_ccw", "coact_node", gs_exc, Es_exc)
+    add_synapse("d_accel_cw",  "coact_node", gs_exc, Es_exc)
+    add_synapse("d_decel_ccw", "coact_node", gs_exc, Es_exc)
+    add_synapse("d_decel_cw",  "coact_node", gs_exc, Es_exc)
 
     # ----------------------------------------------------------------
     # Stage 5 — Bias-gated gain stages  (McNeal & Hunt, Section III-A-2a)
@@ -302,29 +316,36 @@ def build_tc4_network():
     for side in ["ccw", "cw"]:
 
         # Kp: proportional gain  (signal = error)
+        # mod→prod is INHIBITORY per FSA multiplication subnetwork (Szczecinski 2017, Fig. 4).
         add_neuron(new_standard_neuron(f"kp_mod_{side}"))   # receives I_app = bp
         add_neuron(new_standard_neuron(f"kp_prod_{side}"))
         add_synapse(f"error_{side}",  f"kp_prod_{side}", gs_exc, Es_exc)
-        add_synapse(f"kp_mod_{side}", f"kp_prod_{side}", gs_exc, Es_exc)
+        add_synapse(f"kp_mod_{side}", f"kp_prod_{side}", gs_inh, Es_inh)
 
-        # Kd: directional derivative gain  (signal = deriv_out, signed)
+        # Kd: directional derivative gain
+        # d_accel excitatory (increase torque when accelerating away from upright).
+        # d_decel inhibitory (reduce torque when decelerating / returning to upright).
+        # mod→prod INHIBITORY per FSA.
         add_neuron(new_standard_neuron(f"kd_mod_{side}"))   # receives I_app = bd
         add_neuron(new_standard_neuron(f"kd_prod_{side}"))
-        add_synapse(f"deriv_out_{side}", f"kd_prod_{side}", gs_exc, Es_exc)
-        add_synapse(f"kd_mod_{side}",    f"kd_prod_{side}", gs_exc, Es_exc)
+        add_synapse(f"d_accel_{side}", f"kd_prod_{side}", gs_exc, Es_exc)
+        add_synapse(f"d_decel_{side}", f"kd_prod_{side}", gs_inh, Es_inh)
+        add_synapse(f"kd_mod_{side}",  f"kd_prod_{side}", gs_inh, Es_inh)
 
         # Kc: co-activation derivative gain  (signal = coact_node = |d|, unsigned)
         # Both CCW and CW sides receive the same coact_node — symmetric stiffening.
+        # mod→prod INHIBITORY per FSA.
         add_neuron(new_standard_neuron(f"kc_mod_{side}"))   # receives I_app = bc
         add_neuron(new_standard_neuron(f"kc_prod_{side}"))
         add_synapse("coact_node",      f"kc_prod_{side}", gs_exc, Es_exc)
-        add_synapse(f"kc_mod_{side}", f"kc_prod_{side}", gs_exc, Es_exc)
+        add_synapse(f"kc_mod_{side}", f"kc_prod_{side}", gs_inh, Es_inh)
 
         # Kt: Type-Ib tension feedback gain  (signal = ib_input)
+        # mod→prod INHIBITORY per FSA.
         add_neuron(new_standard_neuron(f"kt_mod_{side}"))   # receives I_app = bt
         add_neuron(new_standard_neuron(f"kt_prod_{side}"))
         add_synapse("ib_input",        f"kt_prod_{side}", gs_exc, Es_exc)
-        add_synapse(f"kt_mod_{side}", f"kt_prod_{side}", gs_exc, Es_exc)
+        add_synapse(f"kt_mod_{side}", f"kt_prod_{side}", gs_inh, Es_inh)
 
     # ----------------------------------------------------------------
     # Stage 6 — Type-Ib tension input node
@@ -378,7 +399,7 @@ def build_tc4_network():
 def step_controller(neurons, synapses, bias_neuron_map,
                     body_sway_rad, surface_sway_rad,
                     ta_ccw_activation_prev, ta_cw_activation_prev,
-                    dt_ms):
+                    dt_ms, theta_ref_rad=0.0):
     """
     Advance the TC4 SNS controller by one timestep.
 
@@ -391,6 +412,7 @@ def step_controller(neurons, synapses, bias_neuron_map,
         ta_ccw_activation_prev:   CCW motor activation from previous step [0,1]
         ta_cw_activation_prev:    CW  motor activation from previous step [0,1]
         dt_ms:                    simulation timestep in milliseconds
+        theta_ref_rad:            desired body angle reference (rad); 0 = upright
 
     Returns:
         ta_net_nm:           net active ankle torque (N·m), positive = CCW
@@ -398,10 +420,13 @@ def step_controller(neurons, synapses, bias_neuron_map,
         ta_cw_activation:    updated CW  motor activation [0,1]
     """
     # Convert angles to bilateral SNS currents
-    bs_signed = angle_to_current_na(body_sway_rad)
-    ss_signed = angle_to_current_na(surface_sway_rad)
-    bs_ccw_na, bs_cw_na = split_to_bilateral_na(bs_signed)
-    ss_ccw_na, ss_cw_na = split_to_bilateral_na(ss_signed)
+    bs_signed       = angle_to_current_na(body_sway_rad)
+    ss_signed       = angle_to_current_na(surface_sway_rad)
+    theta_ref_signed = angle_to_current_na(theta_ref_rad)
+
+    bs_ccw_na,        bs_cw_na        = split_to_bilateral_na(bs_signed)
+    ss_ccw_na,        ss_cw_na        = split_to_bilateral_na(ss_signed)
+    theta_ref_ccw_na, theta_ref_cw_na = split_to_bilateral_na(theta_ref_signed)
 
     # Compute Type-Ib input current from muscle tension proxy
     # TODO [REPLACE — Hill-type muscle model]: see tension_to_ib_current_na()
@@ -410,11 +435,13 @@ def step_controller(neurons, synapses, bias_neuron_map,
 
     # Assemble applied current dictionary
     applied_currents = {
-        "bs_ccw":   bs_ccw_na,
-        "bs_cw":    bs_cw_na,
-        "ss_ccw":   ss_ccw_na,
-        "ss_cw":    ss_cw_na,
-        "ib_input": ib_current_na,
+        "bs_ccw":        bs_ccw_na,
+        "bs_cw":         bs_cw_na,
+        "ss_ccw":        ss_ccw_na,
+        "ss_cw":         ss_cw_na,
+        "theta_ref_ccw": theta_ref_ccw_na,
+        "theta_ref_cw":  theta_ref_cw_na,
+        "ib_input":      ib_current_na,
     }
 
     # Apply bias currents to modulator neurons
