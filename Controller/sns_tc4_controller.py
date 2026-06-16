@@ -15,12 +15,15 @@ TC4 conditions (Peterka 2002, Table 2, 1-degree amplitude):
 Error signal:  e = -Wg * BS - Wp * (BS - SS)
 Torque:        Ta = (Kp + Kd * s) * e(t - tau_d)   [PD only, no integral]
 
-Network layout (42 neurons, 56 synapses):
+Network layout (46 neurons, 64 synapses):
   Stage 1 — Bilateral input          (6  neurons)   [+2: theta_ref_ccw/cw]
   Stage 2 — TC4 sensory integration  (8  neurons)   <-- TC4 addition over McNeal & Hunt
   Stage 3 — Derivative estimation    (8  neurons)   [+2: d_decel_ccw/cw]
   Stage 4 — Co-activation |d(t)|     (1  neuron)
-  Stage 5 — Bias-gated gain stages   (16 neurons)   Kp, Kd, Kc, Kt
+  Stage 5 — Bias-gated gain stages   (20 neurons)   Kp, Kd, Kc, Kt
+              4 shared bias neurons (kp/kd/kc/kt_bias): receive I_app = b_alpha
+              8 intermediate neurons (k*_mod_ccw/cw):   receive I_app = R + inhibitory from bias
+              8 product neurons (k*_prod_ccw/cw):       receive signal (exc) + mod (inh)
   Stage 6 — Type-Ib input node       (1  neuron)
   Stage 7 — Bilateral motor output   (2  neurons)
 """
@@ -305,7 +308,8 @@ def build_tc4_network():
     # Stage 5 — Bias-gated gain stages  (McNeal & Hunt, Section III-A-2a)
     #
     # Each control pathway has:
-    #   mod_neuron  — receives bias applied current I_app = b_alpha
+    #   mod_neuron  — receives I_app = R + b_alpha  (R = FSA-mandated operating-point bias;
+    #                 b_alpha = tunable gain control via PSO)
     #   prod_neuron — receives the signal from upstream + modulation
     #
     # The effective pathway gain scales with the bias parameter b_alpha.
@@ -313,38 +317,44 @@ def build_tc4_network():
     # In McNeal & Hunt, bias parameters are optimized via PSO.
     # Starting values from Table IV (Split + kt on): bp=4.26, bd=5.01, bc=2.48, bt=5.42 nA
     # ----------------------------------------------------------------
+    # --- Kp: proportional gain (signal = error) ---
+    # FSA topology: kp_bias -[inh]-> kp_mod -[inh]-> kp_prod; error -[exc]-> kp_prod
+    # Double inhibition: higher bp -> less mod inhibition of prod -> higher gain.
+    add_neuron(new_standard_neuron("kp_bias"))
     for side in ["ccw", "cw"]:
-
-        # Kp: proportional gain  (signal = error)
-        # mod→prod is INHIBITORY per FSA multiplication subnetwork (Szczecinski 2017, Fig. 4).
-        add_neuron(new_standard_neuron(f"kp_mod_{side}"))   # receives I_app = bp
+        add_neuron(new_standard_neuron(f"kp_mod_{side}"))
         add_neuron(new_standard_neuron(f"kp_prod_{side}"))
+        add_synapse("kp_bias",        f"kp_mod_{side}",  gs_inh, Es_inh)
         add_synapse(f"error_{side}",  f"kp_prod_{side}", gs_exc, Es_exc)
         add_synapse(f"kp_mod_{side}", f"kp_prod_{side}", gs_inh, Es_inh)
 
-        # Kd: directional derivative gain
-        # d_accel excitatory (increase torque when accelerating away from upright).
-        # d_decel inhibitory (reduce torque when decelerating / returning to upright).
-        # mod→prod INHIBITORY per FSA.
-        add_neuron(new_standard_neuron(f"kd_mod_{side}"))   # receives I_app = bd
+    # --- Kd: directional derivative gain ---
+    # d_accel excitatory (accelerating away from upright), d_decel inhibitory (returning).
+    add_neuron(new_standard_neuron("kd_bias"))
+    for side in ["ccw", "cw"]:
+        add_neuron(new_standard_neuron(f"kd_mod_{side}"))
         add_neuron(new_standard_neuron(f"kd_prod_{side}"))
+        add_synapse("kd_bias",         f"kd_mod_{side}",  gs_inh, Es_inh)
         add_synapse(f"d_accel_{side}", f"kd_prod_{side}", gs_exc, Es_exc)
         add_synapse(f"d_decel_{side}", f"kd_prod_{side}", gs_inh, Es_inh)
         add_synapse(f"kd_mod_{side}",  f"kd_prod_{side}", gs_inh, Es_inh)
 
-        # Kc: co-activation derivative gain  (signal = coact_node = |d|, unsigned)
-        # Both CCW and CW sides receive the same coact_node — symmetric stiffening.
-        # mod→prod INHIBITORY per FSA.
-        add_neuron(new_standard_neuron(f"kc_mod_{side}"))   # receives I_app = bc
+    # --- Kc: co-activation gain (signal = coact_node = |d|, unsigned) ---
+    add_neuron(new_standard_neuron("kc_bias"))
+    for side in ["ccw", "cw"]:
+        add_neuron(new_standard_neuron(f"kc_mod_{side}"))
         add_neuron(new_standard_neuron(f"kc_prod_{side}"))
-        add_synapse("coact_node",      f"kc_prod_{side}", gs_exc, Es_exc)
+        add_synapse("kc_bias",        f"kc_mod_{side}",  gs_inh, Es_inh)
+        add_synapse("coact_node",     f"kc_prod_{side}", gs_exc, Es_exc)
         add_synapse(f"kc_mod_{side}", f"kc_prod_{side}", gs_inh, Es_inh)
 
-        # Kt: Type-Ib tension feedback gain  (signal = ib_input)
-        # mod→prod INHIBITORY per FSA.
-        add_neuron(new_standard_neuron(f"kt_mod_{side}"))   # receives I_app = bt
+    # --- Kt: Type-Ib tension feedback gain (signal = ib_input) ---
+    add_neuron(new_standard_neuron("kt_bias"))
+    for side in ["ccw", "cw"]:
+        add_neuron(new_standard_neuron(f"kt_mod_{side}"))
         add_neuron(new_standard_neuron(f"kt_prod_{side}"))
-        add_synapse("ib_input",        f"kt_prod_{side}", gs_exc, Es_exc)
+        add_synapse("kt_bias",        f"kt_mod_{side}",  gs_inh, Es_inh)
+        add_synapse("ib_input",       f"kt_prod_{side}", gs_exc, Es_exc)
         add_synapse(f"kt_mod_{side}", f"kt_prod_{side}", gs_inh, Es_inh)
 
     # ----------------------------------------------------------------
@@ -379,14 +389,17 @@ def build_tc4_network():
 
     # ----------------------------------------------------------------
     # Bias neuron map
-    # Maps each bias parameter name to the list of modulator neurons that
-    # receive it as I_applied.  Both CCW and CW sides share the same bias.
+    # Maps each tunable bias parameter to the single shared gain neuron
+    # (k*_bias) that receives I_app = b_alpha.
+    # The mod neurons (k*_mod_ccw/cw) receive a SEPARATE constant I_app = R
+    # applied in step_controller — that is the FSA multiplication operating-
+    # point bias, not the tunable gain.
     # ----------------------------------------------------------------
     bias_neuron_map = {
-        "bp": ["kp_mod_ccw", "kp_mod_cw"],
-        "bd": ["kd_mod_ccw", "kd_mod_cw"],
-        "bc": ["kc_mod_ccw", "kc_mod_cw"],
-        "bt": ["kt_mod_ccw", "kt_mod_cw"],
+        "bp": ["kp_bias"],
+        "bd": ["kd_bias"],
+        "bc": ["kc_bias"],
+        "bt": ["kt_bias"],
     }
 
     return neurons, synapses, bias_neuron_map
@@ -398,40 +411,34 @@ def build_tc4_network():
 
 def step_controller(neurons, synapses, bias_neuron_map,
                     body_sway_rad, surface_sway_rad,
-                    ta_ccw_activation_prev, ta_cw_activation_prev,
-                    dt_ms, theta_ref_rad=0.0):
+                    dt_ms, theta_ref_rad=0.0, ib_current_na=0.0):
     """
     Advance the TC4 SNS controller by one timestep.
 
     Args:
-        neurons:                  dict of Neuron objects (modified in place)
-        synapses:                 list of Synapse objects
-        bias_neuron_map:          dict from build_tc4_network()
-        body_sway_rad:            current body sway angle (rad), positive = CCW
-        surface_sway_rad:         current surface sway angle (rad), positive = CCW
-        ta_ccw_activation_prev:   CCW motor activation from previous step [0,1]
-        ta_cw_activation_prev:    CW  motor activation from previous step [0,1]
-        dt_ms:                    simulation timestep in milliseconds
-        theta_ref_rad:            desired body angle reference (rad); 0 = upright
+        neurons:          dict of Neuron objects (modified in place)
+        synapses:         list of Synapse objects
+        bias_neuron_map:  dict from build_tc4_network()
+        body_sway_rad:    current body sway angle (rad), positive = CCW
+        surface_sway_rad: current surface sway angle (rad), positive = CCW
+        dt_ms:            simulation timestep in milliseconds
+        theta_ref_rad:    desired body angle reference (rad); 0 = upright
+        ib_current_na:    Type-Ib afferent input current (nA), clipped to [0, 10].
+                          In MuJoCo: compute from tendon force sensor output.
+                          In standalone sim: use tension_to_ib_current_na(proxy).
 
     Returns:
-        ta_net_nm:           net active ankle torque (N·m), positive = CCW
-        ta_ccw_activation:   updated CCW motor activation [0,1]
-        ta_cw_activation:    updated CW  motor activation [0,1]
+        ta_ccw_activation:   CCW motor activation [0,1]
+        ta_cw_activation:    CW  motor activation [0,1]
     """
     # Convert angles to bilateral SNS currents
-    bs_signed       = angle_to_current_na(body_sway_rad)
-    ss_signed       = angle_to_current_na(surface_sway_rad)
+    bs_signed        = angle_to_current_na(body_sway_rad)
+    ss_signed        = angle_to_current_na(surface_sway_rad)
     theta_ref_signed = angle_to_current_na(theta_ref_rad)
 
     bs_ccw_na,        bs_cw_na        = split_to_bilateral_na(bs_signed)
     ss_ccw_na,        ss_cw_na        = split_to_bilateral_na(ss_signed)
     theta_ref_ccw_na, theta_ref_cw_na = split_to_bilateral_na(theta_ref_signed)
-
-    # Compute Type-Ib input current from muscle tension proxy
-    # TODO [REPLACE — Hill-type muscle model]: see tension_to_ib_current_na()
-    tension_proxy_n = compute_tension_proxy_n(ta_ccw_activation_prev, ta_cw_activation_prev)
-    ib_current_na   = tension_to_ib_current_na(tension_proxy_n)
 
     # Assemble applied current dictionary
     applied_currents = {
@@ -444,7 +451,7 @@ def step_controller(neurons, synapses, bias_neuron_map,
         "ib_input":      ib_current_na,
     }
 
-    # Apply bias currents to modulator neurons
+    # Apply tunable bias to the shared gain neurons (k*_bias).
     bias_values = {
         "bp": BIAS_PROPORTIONAL_NA,
         "bd": BIAS_DIRECTIONAL_DER_NA,
@@ -454,6 +461,14 @@ def step_controller(neurons, synapses, bias_neuron_map,
     for pathway_name, neuron_names in bias_neuron_map.items():
         for neuron_name in neuron_names:
             applied_currents[neuron_name] = bias_values[pathway_name]
+
+    # Apply constant I_app = R to all intermediate (mod) neurons.
+    # This is the FSA multiplication operating-point bias (Szczecinski 2017, Fig. 4D):
+    # U_inter sits at R with no input; the bias neuron's inhibition pulls it down to
+    # set effective gain.  R × Gm = 20 mV × 1 µS = 20 nA.
+    for side in ["ccw", "cw"]:
+        for pathway in ["kp", "kd", "kc", "kt"]:
+            applied_currents[f"{pathway}_mod_{side}"] = R
 
     # Compute all synaptic currents from last-step voltages (forward Euler)
     synaptic_currents = {name: 0.0 for name in neurons}
@@ -471,11 +486,7 @@ def step_controller(neurons, synapses, bias_neuron_map,
     ta_ccw_activation = motor_voltage_to_activation(neurons["ta_ccw"].V)
     ta_cw_activation  = motor_voltage_to_activation(neurons["ta_cw"].V)
 
-    # Compute net torque
-    # TODO [REPLACE — Hill-type muscle model]: see compute_net_torque_nm()
-    ta_net_nm = compute_net_torque_nm(ta_ccw_activation, ta_cw_activation)
-
-    return ta_net_nm, ta_ccw_activation, ta_cw_activation
+    return ta_ccw_activation, ta_cw_activation
 
 
 # =====================================================================
@@ -507,19 +518,16 @@ if __name__ == "__main__":
     ta_ccw_log           = np.zeros(num_steps)
     ta_cw_log            = np.zeros(num_steps)
 
-    # Initial motor activations (start at rest)
+    # Inverted pendulum state
+    body_sway_rad_state = 0.0
+    body_sway_vel_rad_s = 0.0
     ta_ccw_prev = 0.0
     ta_cw_prev  = 0.0
-
-    # Inverted pendulum state
-    body_sway_rad_state   = 0.0
-    body_sway_vel_rad_s   = 0.0
 
     for step in range(num_steps):
         current_surface_sway = surface_sway_rad[step]
 
         # Body angle as seen in space: theta_B = theta_platform + theta_ankle
-        # (In this simplified loop, theta_ankle ≈ body_sway_rad_state directly.)
         body_angle_rad = body_sway_rad_state + current_surface_sway
 
         # Apply sensory delay to body sway angle
@@ -527,17 +535,22 @@ if __name__ == "__main__":
         delay_buffer       = np.roll(delay_buffer, 1)
         delay_buffer[0]    = body_angle_rad
 
+        # Standalone proxy for Type-Ib current (MuJoCo provides real tendon force instead)
+        ib_na = tension_to_ib_current_na(
+            compute_tension_proxy_n(ta_ccw_prev, ta_cw_prev)
+        )
+
         # Advance SNS controller one step
-        ta_net_nm, ta_ccw_prev, ta_cw_prev = step_controller(
+        ta_ccw_prev, ta_cw_prev = step_controller(
             neurons, synapses, bias_neuron_map,
             body_sway_rad    = delayed_body_sway,
             surface_sway_rad = current_surface_sway,
-            ta_ccw_activation_prev = ta_ccw_prev,
-            ta_cw_activation_prev  = ta_cw_prev,
-            dt_ms = dt_ms
+            dt_ms            = dt_ms,
+            ib_current_na    = ib_na,
         )
 
-        # Inverted pendulum dynamics:  J * theta_ddot + B * theta_dot - mgh * theta_B = Ta
+        # Inverted pendulum dynamics:  J * theta_ddot + B * theta_dot - mgh * theta = Ta
+        ta_net_nm      = compute_net_torque_nm(ta_ccw_prev, ta_cw_prev)
         destab_torque  = DESTABILIZING_TORQUE_NM_PER_RAD * body_angle_rad
         damping_torque = JOINT_DAMPING_NMS_PER_RAD * body_sway_vel_rad_s
         body_sway_acc  = (ta_net_nm - damping_torque + destab_torque) / MOMENT_OF_INERTIA_KGM2

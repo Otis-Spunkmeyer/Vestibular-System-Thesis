@@ -33,59 +33,51 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # =====================================================================
 NODE_POSITIONS = {
     # --- Stage 1: bilateral inputs ---
-    "bs_ccw":        (0.5,  4.5),   "bs_cw":        (0.5, -4.5),
-    "ss_ccw":        (0.5,  2.5),   "ss_cw":        (0.5, -2.5),
-    "theta_ref_ccw": (0.5,  6.5),   "theta_ref_cw": (0.5, -6.5),
+    "bs_ccw":        (0.5,  3.3),   "bs_cw":        (0.5, -3.3),
+    "ss_ccw":        (0.5,  1.3),   "ss_cw":        (0.5, -1.3),
+    "theta_ref_ccw": (0.5,  5.2),   "theta_ref_cw": (0.5, -5.2),
 
-    # --- Stage 2: TC4 sensory integration (CCW) ---
-    "sub_diff_ccw": (2.5,  5.0),
-    "wg_ccw":       (2.5,  2.5),
-    "wp_ccw":       (4.0,  5.0),
-    "error_ccw":    (5.5,  3.5),
+    # --- Stage 2: TC4 sensory integration ---
+    "sub_diff_ccw": (2.0,  4.2),   "sub_diff_cw": (2.0, -4.2),
+    "wg_ccw":       (2.0,  2.2),   "wg_cw":       (2.0, -2.2),
+    "wp_ccw":       (3.3,  4.2),   "wp_cw":       (3.3, -4.2),
+    "error_ccw":    (4.7,  2.8),   "error_cw":    (4.7, -2.8),
 
-    # --- Stage 2: TC4 sensory integration (CW) ---
-    "sub_diff_cw":  (2.5, -5.0),
-    "wg_cw":        (2.5, -2.5),
-    "wp_cw":        (4.0, -5.0),
-    "error_cw":     (5.5, -3.5),
-
-    # --- Stage 3: derivative estimation (CCW) ---
-    "deriv_fast_ccw": (7.5,  5.5),
-    "deriv_slow_ccw": (7.5,  3.0),
-    "d_accel_ccw":    (9.5,  5.0),
-    "d_decel_ccw":    (9.5,  2.5),
-
-    # --- Stage 3: derivative estimation (CW) ---
-    "deriv_fast_cw":  (7.5, -3.0),
-    "deriv_slow_cw":  (7.5, -5.5),
-    "d_accel_cw":     (9.5, -2.5),
-    "d_decel_cw":     (9.5, -5.0),
+    # --- Stage 3: derivative estimation ---
+    "deriv_fast_ccw": (6.0,  4.2),  "deriv_fast_cw": (6.0, -4.2),
+    "deriv_slow_ccw": (6.0,  2.2),  "deriv_slow_cw": (6.0, -2.2),
+    "d_accel_ccw":    (7.3,  3.7),  "d_accel_cw":    (7.3, -3.7),
+    "d_decel_ccw":    (7.3,  2.0),  "d_decel_cw":    (7.3, -2.0),
 
     # --- Stage 4: co-activation node (shared) ---
-    "coact_node": (10.5,  0.0),
+    "coact_node": (8.4, 0.0),
 
-    # --- Stage 5: Kp gain stage ---
-    "kp_mod_ccw": (11.0,  7.0),  "kp_prod_ccw": (12.5,  7.0),
-    "kp_mod_cw":  (11.0, -7.0),  "kp_prod_cw":  (12.5, -7.0),
+    # --- Stage 5 Kp: bias at y=5.2, CCW/CW at ±0.8 ---
+    "kp_bias":    (9.5,  5.2),
+    "kp_mod_ccw": (10.7,  6.0),  "kp_prod_ccw": (11.9,  6.0),
+    "kp_mod_cw":  (10.7,  4.4),  "kp_prod_cw":  (11.9,  4.4),
 
-    # --- Stage 5: Kd gain stage ---
-    "kd_mod_ccw": (11.0,  4.5),  "kd_prod_ccw": (12.5,  4.5),
-    "kd_mod_cw":  (11.0, -4.5),  "kd_prod_cw":  (12.5, -4.5),
+    # --- Stage 5 Kd: bias at y=1.6, CCW/CW at ±0.8 ---
+    "kd_bias":    (9.5,  1.6),
+    "kd_mod_ccw": (10.7,  2.4),  "kd_prod_ccw": (11.9,  2.4),
+    "kd_mod_cw":  (10.7,  0.8),  "kd_prod_cw":  (11.9,  0.8),
 
-    # --- Stage 5: Kc gain stage ---
-    "kc_mod_ccw": (11.0,  1.5),  "kc_prod_ccw": (12.5,  1.5),
-    "kc_mod_cw":  (11.0, -1.5),  "kc_prod_cw":  (12.5, -1.5),
+    # --- Stage 5 Kc: bias at y=-2.0, CCW/CW at ±0.8 ---
+    "kc_bias":    (9.5, -2.0),
+    "kc_mod_ccw": (10.7, -1.2),  "kc_prod_ccw": (11.9, -1.2),
+    "kc_mod_cw":  (10.7, -2.8),  "kc_prod_cw":  (11.9, -2.8),
 
-    # --- Stage 6: Type-Ib input node (shared) ---
-    "ib_input": (14.0,  0.0),
+    # --- Stage 5 Kt: bias at y=1.6, CCW/CW at ±0.8 (same spread as Kd row) ---
+    "kt_bias":    (12.5,  1.6),
+    "kt_mod_ccw": (13.7,  2.4),  "kt_prod_ccw": (14.9,  2.4),
+    "kt_mod_cw":  (13.7,  0.8),  "kt_prod_cw":  (14.9,  0.8),
 
-    # --- Stage 5: Kt gain stage ---
-    "kt_mod_ccw": (14.0,  4.5),  "kt_prod_ccw": (15.5,  4.5),
-    "kt_mod_cw":  (14.0, -4.5),  "kt_prod_cw":  (15.5, -4.5),
+    # --- Stage 6: Type-Ib input (between kt_mod and kt_prod columns, midpoint y) ---
+    "ib_input": (14.3,  1.6),
 
-    # --- Stage 7: bilateral motor output ---
-    "ta_ccw": (17.0,  3.5),
-    "ta_cw":  (17.0, -3.5),
+    # --- Stage 7: ta at mean y of all inputs — kd→ta is horizontal, kp/kc symmetric ---
+    "ta_ccw": (16.0,  2.4),
+    "ta_cw":  (16.0,  0.8),
 }
 
 # =====================================================================
@@ -104,14 +96,18 @@ NODE_LABELS = {
     "d_accel_ccw": "d_a+", "d_accel_cw": "d_a−",
     "d_decel_ccw": "d_d+", "d_decel_cw": "d_d−",
     "coact_node": "|d|",
+    "kp_bias": "Kp",
     "kp_mod_ccw": "bp+", "kp_mod_cw": "bp−",
-    "kp_prod_ccw": "Kp+", "kp_prod_cw": "Kp−",
+    "kp_prod_ccw": "Kp·e+", "kp_prod_cw": "Kp·e−",
+    "kd_bias": "Kd",
     "kd_mod_ccw": "bd+", "kd_mod_cw": "bd−",
-    "kd_prod_ccw": "Kd+", "kd_prod_cw": "Kd−",
+    "kd_prod_ccw": "Kd·d+", "kd_prod_cw": "Kd·d−",
+    "kc_bias": "Kc",
     "kc_mod_ccw": "bc+", "kc_mod_cw": "bc−",
-    "kc_prod_ccw": "Kc+", "kc_prod_cw": "Kc−",
+    "kc_prod_ccw": "Kc·|d|+", "kc_prod_cw": "Kc·|d|−",
+    "kt_bias": "Kt",
     "kt_mod_ccw": "bt+", "kt_mod_cw": "bt−",
-    "kt_prod_ccw": "Kt+", "kt_prod_cw": "Kt−",
+    "kt_prod_ccw": "Kt·T+", "kt_prod_cw": "Kt·T−",
     "ib_input": "+Ib",
     "ta_ccw": "+a_CCW", "ta_cw": "+a_CW",
 }
@@ -142,11 +138,15 @@ NODE_COLORS = {
     "d_decel_ccw": "#F0A500",  "d_decel_cw": "#F0A500",
     "coact_node":  "#F0A500",
 
-    # Modulator neurons (bias-gated) — yellow (matches M&H Kp/Kc/Kd/Kt yellow)
-    "kp_mod_ccw": "#F9E79F", "kp_mod_cw": "#F9E79F",
-    "kd_mod_ccw": "#F9E79F", "kd_mod_cw": "#F9E79F",
-    "kc_mod_ccw": "#F9E79F", "kc_mod_cw": "#F9E79F",
-    "kt_mod_ccw": "#F9E79F", "kt_mod_cw": "#F9E79F",
+    # Shared gain neurons (bias parameter) — bright yellow (matches M&H Kp/Kd/Kc/Kt)
+    "kp_bias": "#F4D03F", "kd_bias": "#F4D03F",
+    "kc_bias": "#F4D03F", "kt_bias": "#F4D03F",
+
+    # Intermediate (mod) neurons — pale yellow (receive I_app=R + inhibitory from bias)
+    "kp_mod_ccw": "#FCF3CF", "kp_mod_cw": "#FCF3CF",
+    "kd_mod_ccw": "#FCF3CF", "kd_mod_cw": "#FCF3CF",
+    "kc_mod_ccw": "#FCF3CF", "kc_mod_cw": "#FCF3CF",
+    "kt_mod_ccw": "#FCF3CF", "kt_mod_cw": "#FCF3CF",
 
     # Product neurons — light purple (matches M&H gain output)
     "kp_prod_ccw": "#C39BD3", "kp_prod_cw": "#C39BD3",
@@ -166,48 +166,48 @@ NODE_COLORS = {
 # Each tuple: (x_left, y_bottom, width, height, fill_color, edge_color, label, label_y)
 # =====================================================================
 BACKGROUND_REGIONS = [
-    # TC4 Sensory Integration (new over McNeal & Hunt) — light green
-    (-0.2, -7.2, 6.6, 14.4,
+    # TC4 Sensory Integration — light green
+    (-0.2, -5.6, 5.3, 11.2,
      "#D5F5E3", "#27AE60",
-     "TC4 Sensory Integration\n(new over McNeal & Hunt)", -6.9),
+     "TC4 Sensory Integration\n(new over McNeal & Hunt)", -5.3),
 
-    # Error formation sub-zone — slightly darker green, dashed
-    (4.8, -4.2, 1.5, 8.4,
+    # Error formation sub-zone
+    (4.3, -3.1, 0.9, 6.2,
      "#A9DFBF", "#1E8449",
-     "Error\nformation", 3.8),
+     "Error\nformation", 2.9),
 
-    # Differential calculations — light bisque / tan
-    (6.8, -6.2, 3.4, 12.4,
+    # Differential calculations — fast/slow, d_accel/d_decel, coact
+    (5.7, -4.5, 3.1, 9.0,
      "#FDEBD0", "#E67E22",
-     "Differential\nCalculations", -5.9),
+     "Differential\nCalculations", -4.3),
 
-    # Derivative Gain Circuits — light blue
-    (10.2, -7.8, 6.0, 15.6,
+    # Derivative Gain Circuits — Kp/Kd/Kc/Kt gain stages
+    (9.1, -3.2, 6.3, 9.7,
      "#D6EAF8", "#2E86C1",
-     "Derivative Gain Circuits", -7.5),
+     "Derivative Gain Circuits", -3.0),
 
-    # Type Ib feedback sub-zone — light gray
-    (13.2, -5.5, 3.0, 11.0,
+    # Type Ib feedback sub-zone — ib_input + Kt pathway
+    (12.1, -0.4, 3.3, 3.2,
      "#E8E8E8", "#7F8C8D",
-     "Type Ib\nfeedback", 5.3),
+     "Type Ib\nfeedback", -0.2),
 ]
 
 # =====================================================================
 # Helper: draw a single rounded-rectangle node
 # =====================================================================
-def _draw_node(ax, x, y, label, color, node_w=0.9, node_h=0.55):
+def _draw_node(ax, x, y, label, color, node_w=0.68, node_h=0.42):
     box = FancyBboxPatch(
         (x - node_w / 2, y - node_h / 2), node_w, node_h,
-        boxstyle="round,pad=0.07",
+        boxstyle="round,pad=0.05",
         facecolor=color,
         edgecolor="#2C3E50",
-        linewidth=1.0,
+        linewidth=0.8,
         zorder=3,
     )
     ax.add_patch(box)
     ax.text(x, y, label,
             ha="center", va="center",
-            fontsize=5.8, fontweight="bold",
+            fontsize=5.2, fontweight="bold",
             color="#1A1A1A", zorder=4)
 
 
@@ -268,18 +268,18 @@ def draw_network(neurons, synapses, output_file=None):
                 bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1))
 
     # --- Bilateral axis labels ---
-    ax.text(-0.5, 4.0, "Active when\nBS is CCW (+)",
-            ha="right", va="center", fontsize=8,
+    ax.text(-0.5, 3.3, "Active when\nBS is CCW (+)",
+            ha="right", va="center", fontsize=7.5,
             style="italic", color="#555555")
-    ax.annotate("", xy=(-0.2, 7.0), xytext=(-0.2, 1.5),
-                arrowprops=dict(arrowstyle="-[,widthB=2.5", color="#555555", lw=1.2),
+    ax.annotate("", xy=(-0.2, 5.5), xytext=(-0.2, 1.0),
+                arrowprops=dict(arrowstyle="-[,widthB=2.2", color="#555555", lw=1.2),
                 zorder=1)
 
-    ax.text(-0.5, -4.0, "Active when\nBS is CW (−)",
-            ha="right", va="center", fontsize=8,
+    ax.text(-0.5, -3.3, "Active when\nBS is CW (−)",
+            ha="right", va="center", fontsize=7.5,
             style="italic", color="#555555")
-    ax.annotate("", xy=(-0.2, -1.5), xytext=(-0.2, -7.0),
-                arrowprops=dict(arrowstyle="-[,widthB=2.5", color="#555555", lw=1.2),
+    ax.annotate("", xy=(-0.2, -1.0), xytext=(-0.2, -5.5),
+                arrowprops=dict(arrowstyle="-[,widthB=2.2", color="#555555", lw=1.2),
                 zorder=1)
 
     # --- Synapses (drawn behind nodes) ---
@@ -296,7 +296,7 @@ def draw_network(neurons, synapses, output_file=None):
         # Slight curve for connections that would otherwise overlap
         rad = 0.0
         if syn.pre == "ib_input":
-            rad = 0.15 if "ccw" in syn.post else -0.15
+            rad = 0.1 if "ccw" in syn.post else -0.1
 
         _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=rad)
 
@@ -309,28 +309,16 @@ def draw_network(neurons, synapses, output_file=None):
         color = NODE_COLORS.get(name, "#EEEEEE")
         _draw_node(ax, x, y, label, color)
 
-    # --- Gain stage group labels (matching M&H's Kp, Kc, Kd, Kt labels) ---
-    gain_label_positions = {
-        "Kp": (11.75,  7.6),   "Kd": (11.75,  5.1),
-        "Kc": (11.75,  2.05),  "Kt": (14.75,  5.1),
-    }
-    for label, (lx, ly) in gain_label_positions.items():
-        ax.text(lx, ly, label,
-                ha="center", va="center",
-                fontsize=9, fontweight="bold", color="#2C3E50",
-                bbox=dict(facecolor="#F9E79F", edgecolor="#B7950B",
-                          boxstyle="round,pad=0.3", linewidth=1.2))
-
     # --- Ib input annotation ---
     ax.annotate("+Ib\n(tension\nproxy)",
-                xy=(14.0, 0.0), xytext=(14.0, -1.8),
-                ha="center", fontsize=7, color="#7F8C8D",
+                xy=(14.3, 1.6), xytext=(14.3, 0.2),
+                ha="center", fontsize=6.5, color="#7F8C8D",
                 arrowprops=dict(arrowstyle="->", color="#7F8C8D", lw=1.0))
 
     # --- Motor output arrows (exiting diagram) ---
-    for side, (_, my) in [("CCW", (17.0, 3.5)), ("CW", (17.0, -3.5))]:
+    for side, my in [("CCW", 2.4), ("CW", 0.8)]:
         ax.annotate(f"+a_{side}",
-                    xy=(18.2, my), xytext=(17.6, my),
+                    xy=(17.0, my), xytext=(16.5, my),
                     fontsize=8, fontweight="bold", va="center",
                     arrowprops=dict(arrowstyle="-|>", color="#E74C3C", lw=2.0))
 
@@ -340,8 +328,9 @@ def draw_network(neurons, synapses, output_file=None):
         mpatches.Patch(color="#F1948A", label="Error node"),
         mpatches.Patch(color="#85C1E9", label="Derivative fast/slow"),
         mpatches.Patch(color="#F0A500", label="Deriv output / |d|"),
-        mpatches.Patch(color="#F9E79F", label="Bias modulator (bias-gated)"),
-        mpatches.Patch(color="#C39BD3", label="Gain product (Kp/Kd/Kc/Kt)"),
+        mpatches.Patch(color="#F4D03F", label="Gain neuron (Kp/Kd/Kc/Kt) — I_app=b_alpha"),
+        mpatches.Patch(color="#FCF3CF", label="Intermediate (mod) — I_app=R"),
+        mpatches.Patch(color="#C39BD3", label="Product neuron (signal × gain)"),
         mpatches.Patch(color="#BDC3C7", label="Type-Ib input"),
         mpatches.Patch(color="#E74C3C", label="Motor output"),
         mpatches.Patch(color="#F39C12", label="Input (bilateral)"),
@@ -356,15 +345,15 @@ def draw_network(neurons, synapses, output_file=None):
     # --- Title ---
     ax.set_title(
         "TC4 SNS Controller  —  McNeal & Hunt 2026 architecture + TC4 dual-channel sensory integration\n"
-        r"42 neurons  |  56 synapses  "
+        r"46 neurons  |  64 synapses  "
         r"$\bullet$  $e = \theta_{ref} - W_g \cdot BS - W_p \cdot (BS - SS)$  "
-        r"$\bullet$  split derivative: $K_d$ (directional, accel/decel) + $K_c$ (co-activation)  "
-        r"$\bullet$  $K_t$ = Type-Ib  $\bullet$  mod$\to$prod: inhibitory (FSA)",
+        r"$\bullet$  split derivative: $K_d$ (directional) + $K_c$ (co-activation)  "
+        r"$\bullet$  FSA gain: bias $\to$ mod $\to$ prod (double-inhibitory)",
         fontsize=9, pad=12,
     )
 
-    ax.set_xlim(-1.5, 19.5)
-    ax.set_ylim(-9.0, 9.0)
+    ax.set_xlim(-1.5, 17.6)
+    ax.set_ylim(-6.2, 7.2)
     ax.set_aspect("equal")
     ax.axis("off")
 

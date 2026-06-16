@@ -76,6 +76,8 @@ def make_subtraction_network():
 
 # Multiplication subnetwork
 # requires a third neuron that acts as a modulator to control the gain of the synapse from u1 to u_prod based on the voltage of u2
+# IMPORTANT: the intermediate (mul_mod) neuron requires I_app = R × Gm applied externally
+# at runtime (Szczecinski 2017, Fig. 4 panel D).  This function returns the topology only.
 def make_multiplication_network():
     # create neurons and synapses
     # return u1, u2, u3, u_prod, syn1, syn2, syn3
