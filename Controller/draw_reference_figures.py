@@ -112,7 +112,7 @@ def fig_neuron():
     ground(ax, 2.0, BOT - 0.05)
 
     # ── Cm branch ──
-    capacitor(ax, x_cm, BOT, TOP, label='$C_m$', val='5 nF')
+    capacitor(ax, x_cm, BOT, TOP, label='$C_m$', val='1 nF')
 
     # ── Gm branch (resistor + Er battery in series) ──
     # Split the vertical space:  bottom third = Er, top two thirds = Gm
@@ -147,7 +147,7 @@ def fig_neuron():
         ('$E_{hi}$','−40 mV',  'Full activation voltage'),
         ('$E_{lo}$','−60 mV',  'Zero activation (= $E_r$)'),
         ('$U$',     '$V - E_r$','Activation above rest (0 → 20 mV)'),
-        ('$\\tau$', '$C_m/G_m$ = 5 ms', 'Membrane time constant'),
+        ('$\\tau$', '$C_m/G_m$ = 1 ms', 'Membrane time constant'),
     ]
     ax.text(5.3, TOP + 0.1, 'Parameter values', fontsize=11,
             fontweight='bold', va='top', color=BLACK)
@@ -259,7 +259,7 @@ def fig_synapse():
     ground(ax, 3.2, BOT - 0.05)
 
     # ── Cm branch ──
-    capacitor(ax, x_cm, BOT, TOP, label='$C_m$', val='5 nF')
+    capacitor(ax, x_cm, BOT, TOP, label='$C_m$', val='1 nF')
 
     # ── Gm + Er branch ──
     y_split = BOT + (TOP-BOT)*0.38
@@ -367,11 +367,13 @@ def fig_substitution():
          r'[fixed max gs]  ×  [Eq.4: how open — 0→1]  ×  [driving force]',
          BLACK, '#EAF2FF', BLUE),
 
-        (0.15, 'STEP 4 — Shorthand form  (used in code and lectures)',
+        (0.20, 'STEP 4 — Shorthand form  (used in code and lectures)',
          r'$I_{syn} \;=\; g_{s,i} \;\cdot\; a(V_{pre}) \;\cdot\; (E_{s,i} - V)$'
          '\n'
-         r'where  $a(V_{pre}) = \text{clip}\!\left(\dfrac{V_{pre}-E_{lo}}{R},\;0,\;1\right)$',
+         r'where  $a(V_{pre}) = \text{clip}\!\left(\dfrac{V_{pre}-E_{lo}}{R},\;0,\;1\right)$'
+         '\n'
          r'"$a$" is not in the paper — it is shorthand for the Eq. 4 fraction.',
+         '',
          BLACK, '#EAFAF1', GREEN),
     ]
 
@@ -698,8 +700,8 @@ def fig_fsa_subnetworks():
     arr(ax, 4.4, 4.05)
     step(ax,
          r'TC4: $f_{max}\approx5\,\mathrm{Hz}$  →  need $\tau_s \ll 32\,\mathrm{ms}$.' '\n'
-         r'Choose $\tau_s=10\,\mathrm{ms}$, $\tau_f=2\,\mathrm{ms}$  ($5\times$ apart).' '\n'
-         r'$C_m = \tau\cdot G_m$:  $C_m^{fast}=2\,\mathrm{nF}$,  $C_m^{slow}=10\,\mathrm{nF}$  ✓',
+         r'Choose $\tau_s=8\,\mathrm{ms}$, $\tau_f=0.1\,\mathrm{ms}$  ($80\times$ apart).' '\n'
+         r'$C_m = \tau\cdot G_m$:  $C_m^{fast}=0.1\,\mathrm{nF}$,  $C_m^{slow}=8\,\mathrm{nF}$  ✓',
          3.95, ORANGE, '#FEF9E7', fs=8.5)
 
     plt.tight_layout(rect=[0, 0, 1, 0.96])
@@ -924,15 +926,15 @@ def fig_mcneal_split_deriv():
     # ══ Panel A — 7-Stage Pipeline ════════════════════════════════════
     ax = axes[0, 0]
     ax.set_xlim(0, 11); ax.set_ylim(0, 10)
-    ax.text(0.3, 9.75, 'A — 7-Stage Network Pipeline  (38 neurons, 46 synapses)',
+    ax.text(0.3, 9.75, 'A — 7-Stage Network Pipeline  (46 neurons, 64 synapses)',
             fontsize=11, fontweight='bold', color=BLUE)
 
     stages = [
-        (1.0,  'Stage 1\nBilateral\nInput\n(4 n)',     BLUE,   '#EAF2FF', 1.5),
+        (1.0,  'Stage 1\nBilateral\nInput\n(6 n)',     BLUE,   '#EAF2FF', 1.5),
         (2.85, 'Stage 2\nTC4 Sensory\n(8 n × 2)',      GREEN,  '#EAFAF1', 1.4),
-        (4.65, 'Stage 3\nDerivative\n(6 n × 2)',       ORANGE, '#FEF9E7', 1.4),
+        (4.65, 'Stage 3\nDerivative\n(8 n)',           ORANGE, '#FEF9E7', 1.4),
         (6.2,  'Stage 4\nCo-act.\n(1 n)',              RED,    '#FDEDEC', 1.1),
-        (7.85, 'Stage 5\nBias Gain\n(16 n × 2)',       PURPLE, PURPLEBG,  1.6),
+        (7.85, 'Stage 5\nBias Gain\n(20 n)',           PURPLE, PURPLEBG,  1.6),
         (9.4,  'Stage 6\nType-Ib\n(1 n)',              GREY,   '#F0F0F0', 1.1),
         (10.55,'Stage 7\nOutput\n(2 n)',                BLACK,  '#F4F6F7', 1.0),
     ]
@@ -959,9 +961,9 @@ def fig_mcneal_split_deriv():
     ax.text(10.95, 6.7, r'$T_a$', fontsize=8, color=BLACK, ha='left')
 
     labels_below = [
-        (1.0,  'bs_ccw, bs_cw\nss_ccw, ss_cw'),
+        (1.0,  'bs_ccw, bs_cw\nss_ccw, ss_cw\ntheta_ref_ccw/cw'),
         (2.85, 'sub_diff\nwg, wp, error'),
-        (4.65, 'deriv_fast\nderiv_slow\nderiv_out'),
+        (4.65, 'deriv_fast\nderiv_slow\nd_accel, d_decel'),
         (6.2,  'coact_node'),
         (7.85, 'kp/kd/kc/kt\nmod + prod'),
         (9.4,  'ib_input'),
@@ -1370,7 +1372,7 @@ def fig_tc4_assembly():
     ax_S.set_xlim(0, 10);   ax_S.set_ylim(0, 10)
 
     fig.suptitle('Segment 7 — Full TC4 SNS Controller Assembly\n'
-                 '38 neurons · 46 synapses · 4 bias parameters · Peterka 2002 TC4',
+                 '46 neurons · 64 synapses · 4 bias parameters · Peterka 2002 TC4',
                  fontsize=13, fontweight='bold', y=0.98)
 
     def sarr(ax, x1, y1, x2, y2, lc=BLACK, lw=1.5):
@@ -1403,7 +1405,7 @@ def fig_tc4_assembly():
     # ── Stage 1 ──────────────────────────────────────────────────────
     for yc, s in [(y_ccw, 'ccw'), (y_cw, 'cw')]:
         stage_box(ax_L, x1, yc, BW_sm, 2.4, 'Stage 1\nInput (×2)',
-                  [f'bs_{s}', f'ss_{s}'], '#EAF2FF', BLUE, fs_t=8, fs_n=7)
+                  [f'bs_{s}', f'ss_{s}', 'theta_ref'], '#EAF2FF', BLUE, fs_t=8, fs_n=7)
         ax_L.text(0.1, yc+0.45, r'$\theta_B$', fontsize=8, color=BLUE,  va='center', ha='left')
         ax_L.text(0.1, yc-0.45, r'$\theta_S$', fontsize=8, color=GREEN, va='center', ha='left')
         sarr(ax_L, 0.55, yc+0.45, x1-BW_sm/2, yc+0.45, BLUE,  1.2)
@@ -1417,8 +1419,8 @@ def fig_tc4_assembly():
 
     # ── Stage 3 ──────────────────────────────────────────────────────
     for yc, s in [(y_ccw, 'ccw'), (y_cw, 'cw')]:
-        stage_box(ax_L, x3, yc, BW_main, 3.4, 'Stage 3\nDerivative (×2)',
-                  ['fast  Cm=2nF', 'slow  Cm=10nF', 'deriv_out'],
+        stage_box(ax_L, x3, yc, BW_main, 4.2, 'Stage 3\nDerivative (×2)',
+                  ['fast  Cm=0.1nF', 'slow  Cm=8nF', 'd_accel', 'd_decel'],
                   '#FEF9E7', ORANGE)
 
     # ── Stage 4 (shared) ─────────────────────────────────────────────
@@ -1459,9 +1461,9 @@ def fig_tc4_assembly():
         harr(ax_L, x5+BW_main/2, x7-1.5/2, yc)
 
     # ── Stage 3 → Stage 4 (coact) ────────────────────────────────────
-    sarr(ax_L, x3, y_ccw-3.4/2, x4, y_mid+2.2/2, RED, 1.3)
+    sarr(ax_L, x3, y_ccw-4.2/2, x4, y_mid+2.2/2, RED, 1.3)
     ax_L.text((x3+x4)/2-0.3, 13.8, 'd_ccw', fontsize=6.5, color=RED, ha='center')
-    sarr(ax_L, x3, y_cw+3.4/2,  x4, y_mid-2.2/2, RED, 1.3)
+    sarr(ax_L, x3, y_cw+4.2/2,  x4, y_mid-2.2/2, RED, 1.3)
     ax_L.text((x3+x4)/2-0.3, 8.3,  'd_cw',  fontsize=6.5, color=RED, ha='center')
 
     # ── Stage 4 → Stage 5 (|d| → kc) ────────────────────────────────
@@ -1505,8 +1507,8 @@ def fig_tc4_assembly():
         (r'$\Delta E_{inh}$',    '−40 mV',                    'Seg 4C', ORANGE),
         (r'$G_{S,Wg}$',          '0.031 µS   (k=0.30)',        'Seg 4A', BLUE),
         (r'$G_{S,Wp}$',          '0.075 µS   (k=0.70)',        'Seg 4A', BLUE),
-        (r'$C_{m,fast}$',        '2 nF   (τ=2 ms)',            'Seg 4D', ORANGE),
-        (r'$C_{m,slow}$',        '10 nF   (τ=10 ms)',          'Seg 4D', ORANGE),
+        (r'$C_{m,fast}$',        '0.1 nF   (τ=0.1 ms)',        'Seg 4D', ORANGE),
+        (r'$C_{m,slow}$',        '8 nF   (τ=8 ms)',            'Seg 4D', ORANGE),
         (r'$b_p, b_d, b_c, b_t$','4.26, 5.01, 2.48, 5.42 nA', 'Seg 6',  PURPLE),
         (r'$W_p,\;W_g$',         '0.70,  0.30',               'Seg 5',  RED),
         (r'$\tau_d$',            '90 ms',                     'Seg 5',  RED),
@@ -1765,8 +1767,8 @@ def fig_node_derivative():
     ax = axes[0]
     _ptitle(ax, 'fast / slow  (error integrators)', BLUE)
     _nd(ax, 1.8, 9.9, 'error', C_ERR)
-    _nd(ax, 6.5, 10.7, r'fast  $\tau$=2ms',  C_FAST, w=2.2)
-    _nd(ax, 6.5,  9.0, r'slow  $\tau$=10ms', C_SLOW, w=2.2)
+    _nd(ax, 6.5, 10.7, r'fast  $\tau$=0.1ms',  C_FAST, w=2.2)
+    _nd(ax, 6.5,  9.0, r'slow  $\tau$=8ms',   C_SLOW, w=2.2)
     _syn(ax, 1.8, 9.9, 6.5, 10.7, EXC, 'exc', hw=1.1, hh=0.375)
     _syn(ax, 1.8, 9.9, 6.5,  9.0, EXC, 'exc', hw=1.1, hh=0.375)
     ax.text(5, 8.15,
@@ -1786,13 +1788,13 @@ def fig_node_derivative():
     _arrd(ax, 4.85, 4.55)
     _stp(ax, 4.5,
          r'Choose $C_m$ to set bandwidth:' '\n'
-         r'fast:  $\tau_f = 2\,\mathrm{ms}$  →  $C_m = \tau_f G_m = 2\,\mathrm{nF}$' '\n'
-         r'slow:  $\tau_s = 10\,\mathrm{ms}$ →  $C_m = 10\,\mathrm{nF}$',
+         r'fast:  $\tau_f = 0.1\,\mathrm{ms}$  →  $C_m = \tau_f G_m = 0.1\,\mathrm{nF}$' '\n'
+         r'slow:  $\tau_s = 8\,\mathrm{ms}$ →  $C_m = 8\,\mathrm{nF}$',
          ORANGE, '#FEF9E7', fs=8)
     _arrd(ax, 3.1, 2.8)
     _stp(ax, 2.75,
          r'fast tracks $e(t)$ quickly;  slow lags  →  difference $\approx \dot{e}$' '\n'
-         r'$U_{fast}-U_{slow} \approx (\tau_s-\tau_f)\dfrac{de}{dt} = 8\,\mathrm{ms}\cdot\dot{e}$  ✓',
+         r'$U_{fast}-U_{slow} \approx (\tau_s-\tau_f)\dfrac{de}{dt} = 7.9\,\mathrm{ms}\cdot\dot{e}$  ✓',
          RED, '#FDEDEC', fs=8)
 
     # ── Panel 1 : deriv_out  (fast − slow) ────────────────────────────
@@ -2070,19 +2072,21 @@ def fig_proof_error():
     ax_n.text(5, 9.5, 'Stage 2 — TC4 Sensory Integration  (CCW side)',
               ha='center', fontsize=8.5, fontweight='bold', color=GREEN)
 
-    _nd(ax_n, 1.2, 7.5, r'$\theta_b$', C_INP, w=1.3, h=0.7)
-    _nd(ax_n, 1.2, 4.5, r'$\theta_s$', C_INP, w=1.3, h=0.7)
-    _nd(ax_n, 4.0, 7.5, 'sub_diff',   C_MID, w=1.85)
-    _nd(ax_n, 4.0, 2.5, 'wg',         C_TRN, w=1.5)
-    _nd(ax_n, 7.2, 6.0, 'wp',         C_TRN, w=1.5)
-    _nd(ax_n, 9.2, 3.8, r'$e(t)$',    C_ERR, w=1.3, h=0.7)
+    _nd(ax_n, 1.2, 7.5, r'$\theta_b$',    C_INP,     w=1.3, h=0.7)
+    _nd(ax_n, 1.2, 4.5, r'$\theta_s$',    C_INP,     w=1.3, h=0.7)
+    _nd(ax_n, 1.2, 2.0, r'$\theta_{ref}=0$', '#E8E8E8', w=1.5, h=0.7)
+    _nd(ax_n, 4.0, 7.5, 'sub_diff',       C_MID,     w=1.85)
+    _nd(ax_n, 4.0, 2.5, 'wg',             C_TRN,     w=1.5)
+    _nd(ax_n, 7.2, 6.0, 'wp',             C_TRN,     w=1.5)
+    _nd(ax_n, 9.2, 3.8, r'$e(t)$',        C_ERR,     w=1.3, h=0.7)
 
-    _syn(ax_n, 1.2, 7.5, 4.0, 7.5, EXC, hw=0.65, hh=0.35)
-    _syn(ax_n, 1.2, 4.5, 4.0, 7.5, INH, hw=0.65, hh=0.35)
-    _syn(ax_n, 1.2, 7.5, 4.0, 2.5, EXC, hw=0.65, hh=0.35)
-    _syn(ax_n, 4.0, 7.5, 7.2, 6.0, EXC, hw=0.925, hh=0.375)
-    _syn(ax_n, 4.0, 2.5, 9.2, 3.8, EXC, hw=0.75,  hh=0.35)
-    _syn(ax_n, 7.2, 6.0, 9.2, 3.8, EXC, hw=0.75,  hh=0.35)
+    _syn(ax_n, 1.2, 7.5, 4.0, 7.5, EXC,  hw=0.65, hh=0.35)
+    _syn(ax_n, 1.2, 4.5, 4.0, 7.5, INH,  hw=0.65, hh=0.35)
+    _syn(ax_n, 1.2, 7.5, 4.0, 2.5, EXC,  hw=0.65, hh=0.35)
+    _syn(ax_n, 4.0, 7.5, 7.2, 6.0, EXC,  hw=0.925, hh=0.375)
+    _syn(ax_n, 4.0, 2.5, 9.2, 3.8, EXC,  hw=0.75,  hh=0.35)
+    _syn(ax_n, 7.2, 6.0, 9.2, 3.8, EXC,  hw=0.75,  hh=0.35)
+    _syn(ax_n, 1.2, 2.0, 9.2, 3.8, EXC,  hw=0.75,  hh=0.35)
 
     lkw = dict(fontsize=6.5, ha='center')
     ax_n.text(2.6,  8.05, r'$g_e$=0.115',       color=EXC, **lkw)
@@ -2091,8 +2095,11 @@ def fig_proof_error():
     ax_n.text(5.3,  7.25, r'$G_{Wp}$=0.075',    color=EXC, **lkw)
     ax_n.text(6.4,  2.7,  r'$g_e$=0.115',       color=EXC, **lkw)
     ax_n.text(8.85, 5.15, r'$g_e$=0.115',       color=EXC, **lkw)
+    ax_n.text(5.5,  2.6,  r'$g_e$=0.115',       color='#AAAAAA', fontsize=6.5, ha='center')
+    ax_n.text(1.2,  1.3,  r'(always 0 in TC4)',  color=GREY, fontsize=6, ha='center',
+              style='italic')
 
-    ax_n.text(5, 1.05,
+    ax_n.text(5, 0.65,
               r'$W_g=0.30$,  $W_p=0.70$,  $R=20$ mV,  $\Delta E_e=+194$ mV,  '
               r'$\Delta E_{inh}=-40$ mV',
               ha='center', fontsize=7.5, color=GREY)
@@ -2100,7 +2107,8 @@ def fig_proof_error():
     # ── Proof ────────────────────────────────────────────────────────
     y = _thm_box(ax_p, 11.8, 'THEOREM 1', [
         r'The TC4 sensory integration stage computes  [Peterka 2002, TC4]:',
-        r'$U_{err} = (W_g+W_p)\,\theta_b - W_p\,\theta_s$  with  $W_g=0.30,\ W_p=0.70$',
+        r'$U_{err} = \theta_{ref} + (W_g+W_p)\,\theta_b - W_p\,\theta_s$  '
+        r'($\theta_{ref}=0$)  $=\;\theta_b - 0.70\,\theta_s$',
     ])
     ax_p.text(0.4, y, 'Proof  (FSA design — Szczecinski & Quinn 2017, Eq. 13):',
               fontsize=9, fontweight='bold', color=BLACK, va='top')
@@ -2129,8 +2137,9 @@ def fig_proof_error():
     y -= 1.1; _parr(ax_p, y, y - 0.3); y -= 0.45
 
     _pstp(ax_p, y,
-          r'(4)  error  [Eq. 13, 2 exc., $k=1$]' '\n'
-          r'$g_e=R/(\Delta E_e-R)=0.115\,\mu S$  $\Rightarrow$  $U_{err}=U_{wg}+U_{wp}$' '\n'
+          r'(4)  error  [Eq. 13, 3 exc.: wg + wp + $\theta_{ref}$,  $k=1$]' '\n'
+          r'$g_e=R/(\Delta E_e-R)=0.115\,\mu S$;  $\theta_{ref}=0$ always  '
+          r'$\Rightarrow$  $U_{err}=U_{wg}+U_{wp}+0$' '\n'
           r'Substitute (1)(2)(3):  $U_{err}=0.30\,\theta_b+0.70\,(\theta_b-\theta_s)'
           r'=\theta_b-0.70\,\theta_s$',
           ORANGE, '#FEF9E7')
@@ -2166,8 +2175,8 @@ def fig_proof_derivative():
               ha='center', fontsize=8.5, fontweight='bold', color=ORANGE)
 
     _nd(ax_n, 1.5, 5.5, r'$e(t)$',   C_ERR,  w=1.4, h=0.7)
-    _nd(ax_n, 4.8, 7.8, r'fast  $\tau_f$=2ms',  C_FAST, w=2.2, h=0.8)
-    _nd(ax_n, 4.8, 3.2, r'slow  $\tau_s$=10ms', C_SLOW, w=2.2, h=0.8)
+    _nd(ax_n, 4.8, 7.8, r'fast  $\tau_f$=0.1ms',  C_FAST, w=2.2, h=0.8)
+    _nd(ax_n, 4.8, 3.2, r'slow  $\tau_s$=8ms',   C_SLOW, w=2.2, h=0.8)
     _nd(ax_n, 8.2, 5.5, 'deriv_out', C_DOUT, w=1.9, h=0.7)
 
     _syn(ax_n, 1.5, 5.5, 4.8, 7.8, EXC, hw=0.7, hh=0.35)
@@ -2184,14 +2193,14 @@ def fig_proof_derivative():
               r'$G_m=1\,\mu S$  for all neurons   $\Rightarrow$   $\tau=C_m/G_m$',
               ha='center', fontsize=7.5, color=GREY)
     ax_n.text(5, 1.1,
-              r'fast: $C_m=2\,\mathrm{nF}$, $\tau_f=2\,\mathrm{ms}$   '
-              r'slow: $C_m=10\,\mathrm{nF}$, $\tau_s=10\,\mathrm{ms}$',
+              r'fast: $C_m=0.1\,\mathrm{nF}$, $\tau_f=0.1\,\mathrm{ms}$   '
+              r'slow: $C_m=8\,\mathrm{nF}$, $\tau_s=8\,\mathrm{ms}$',
               ha='center', fontsize=7.5, color=GREY)
 
     # ── Proof ────────────────────────────────────────────────────────
     y = _thm_box(ax_p, 11.8, 'THEOREM 2', [
         r'The derivative stage computes:',
-        r'$d(t)\approx(\tau_s-\tau_f)\,\dot{e}(t)=8\,\mathrm{ms}\cdot\dot{e}(t)$',
+        r'$d(t)\approx(\tau_s-\tau_f)\,\dot{e}(t)=7.9\,\mathrm{ms}\cdot\dot{e}(t)$',
     ])
     ax_p.text(0.4, y, 'Proof  (Eq. 13 + Laplace analysis):',
               fontsize=9, fontweight='bold', color=BLACK, va='top')
@@ -2207,27 +2216,27 @@ def fig_proof_derivative():
     _pstp(ax_p, y,
           r'(2)  Time domain:  $C_m\dot{U}=-G_m U+I_{syn}$' '\n'
           r'Laplace:  $H(s)=\dfrac{1}{1+\tau s}$,  $\tau=C_m/G_m$' '\n'
-          r'Choose $C_m$:  fast $\tau_f=2\,\mathrm{ms}$ ($C_m=2\,\mathrm{nF}$);  '
-          r'slow $\tau_s=10\,\mathrm{ms}$ ($C_m=10\,\mathrm{nF}$)',
+          r'Choose $C_m$:  fast $\tau_f=0.1\,\mathrm{ms}$ ($C_m=0.1\,\mathrm{nF}$);  '
+          r'slow $\tau_s=8\,\mathrm{ms}$ ($C_m=8\,\mathrm{nF}$)',
           BLUE, '#EAF2FF')
     y -= 1.5; _parr(ax_p, y, y - 0.3); y -= 0.45
 
     _pstp(ax_p, y,
-          r'(3)  deriv\_out  [Eq. 13, subtraction, same as sub\_diff]' '\n'
-          r'$g_{inh}=0.558\,\mu S$  $\Rightarrow$  $U_{deriv}=U_{fast}-U_{slow}$',
+          r'(3)  d\_accel / d\_decel  [Eq. 13, subtraction, same as sub\_diff]' '\n'
+          r'$g_{inh}=0.558\,\mu S$  $\Rightarrow$  $U_{d\_accel}=U_{fast}-U_{slow}$',
           GREEN, '#EAFAF1')
     y -= 1.1; _parr(ax_p, y, y - 0.3); y -= 0.45
 
     _pstp(ax_p, y,
           r'(4)  Transfer function of the combined stage:' '\n'
           r'$D(s)=E(s)\cdot\dfrac{(\tau_s-\tau_f)\,s}{(1+\tau_f s)(1+\tau_s s)}$'
-          r'  $[\tau_s-\tau_f=8\,\mathrm{ms}]$' '\n'
-          r'For $\omega\ll100\,\mathrm{rad/s}$:  $D(s)\approx 8\,\mathrm{ms}\cdot s\cdot E(s)$',
+          r'  $[\tau_s-\tau_f=7.9\,\mathrm{ms}]$' '\n'
+          r'For $\omega\ll100\,\mathrm{rad/s}$:  $D(s)\approx 7.9\,\mathrm{ms}\cdot s\cdot E(s)$',
           ORANGE, '#FEF9E7')
     y -= 1.4
 
     _qed_box(ax_p,
-             r'$\therefore$  $d(t)\approx(\tau_s-\tau_f)\,\dot{e}(t)=8\,\mathrm{ms}'
+             r'$\therefore$  $d(t)\approx(\tau_s-\tau_f)\,\dot{e}(t)=7.9\,\mathrm{ms}'
              r'\cdot\dot{e}(t)$  (valid below 100 rad/s)   □',
              y_bot=y - 0.45)
 
@@ -2424,7 +2433,7 @@ def fig_proof_final():
 
     _pstp(ax_p, y,
           r'(2)  [By Theorem 2]  Stage 3 computes:' '\n'
-          r'$d(t)\approx8\,\mathrm{ms}\cdot\dot{e}(t)$  '
+          r'$d(t)\approx7.9\,\mathrm{ms}\cdot\dot{e}(t)$  '
           r'(valid for $\omega\ll100\,\mathrm{rad/s}$)',
           BLUE, '#EAF2FF')
     y -= 1.1; _parr(ax_p, y, y - 0.3); y -= 0.45

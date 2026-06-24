@@ -174,18 +174,27 @@ def run_segment(neurons, synapses, I_app_dict, dt_ms=0.1, steps=2000):
 # Step 5: Angle Encoding
 # ====================
 
+THETA_BIAS = (R / 2) * Gm  # 10.0 nA -- centers ±10 deg in the operating range
+
 def build_iapp(theta_deg, theta_ref_deg=0.0, bp=4.26):
     # WHY default arguments?
-    # theta_ref_deg=0.0 means "if you don't specify refernce angle, 
+    # theta_ref_deg=0.0 means "if you don't specify refernce angle,
     # # assume upright (0 degrees)". Default arguments let you call the
     # function as build_iapps(5.0) and still get sensible behavior.
     # same for bp=4.26 -- the tuned kp bias from TC4 PSO fit.
+    #
+    # WHY THETA_BIAS?
+    # SNS synapses only transmit when V_pre is between Elo and Ehi.
+    # A negative theta drives theta_in below Elo, silencing its synapses.
+    # Adding THETA_BIAS to both inputs keeps them in the active range.
+    # The offset cancels in the error subtraction:
+    #   error_cw = (theta_ref + bias) - (theta_in + bias) = theta_ref - theta_in
     return {
-        "theta_in": theta_deg * DEG_TO_NA,
-        "theta_ref": theta_ref_deg * DEG_TO_NA,
+        "theta_in":  theta_deg     * DEG_TO_NA + THETA_BIAS,
+        "theta_ref": theta_ref_deg * DEG_TO_NA + THETA_BIAS,
         "kp_mod_ccw": I_APP_MOD, # holds kp_mod at U=R (fully blocking)
-        "kp_mod_cw": I_APP_MOD, # same for CW channel
-        "kp_bias": bp,          # encodes the KP gain value
+        "kp_mod_cw":  I_APP_MOD, # same for CW channel
+        "kp_bias": bp,           # encodes the KP gain value
     }
 
 #=====================
@@ -256,6 +265,8 @@ def draw_diagram(synapses, log=None, theta_deg=0.0, theta_ref_deg=0.0, bp=4.26):
         label = NODE_LABELS[name]
         if log is not None:
             U = log[name][-1] - Er
+            if name in ("theta_in", "theta_ref"):
+                U -= THETA_BIAS
             label += f"\nU={U:+.2f}"
 
         ax.text(x, y, label, ha="center", va="center",
@@ -408,6 +419,8 @@ if __name__ == "__main__":
     print(f"  theta={args.theta} deg   theta_ref={args.theta_ref} deg   bp={args.bp} nA\n")
     for name, nrn in neurons.items():
         U = log[name][-1] - Er
+        if name in ("theta_in", "theta_ref"):
+            U -= THETA_BIAS
         print(f"  {name:<14} U = {U:+.3f} mV")
 
     if not args.no_plot:

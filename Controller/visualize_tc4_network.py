@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch
 
-from sns_tc4_controller import build_tc4_network
+from sns_tc4_controller import build_neurons, build_synapses, build_tc4_network, Er
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,7 +35,9 @@ NODE_POSITIONS = {
     # --- Stage 1: bilateral inputs ---
     "bs_ccw":        (0.5,  3.3),   "bs_cw":        (0.5, -3.3),
     "ss_ccw":        (0.5,  1.3),   "ss_cw":        (0.5, -1.3),
-    "theta_ref_ccw": (0.5,  5.2),   "theta_ref_cw": (0.5, -5.2),
+    # Single shared node — theta_ref = 0, so no bilateral split needed.
+    # Both synapses (→ error_ccw and → error_cw) branch from this one position.
+    "theta_ref_ccw": (0.5,  0.0),   "theta_ref_cw": (0.5,  0.0),
 
     # --- Stage 2: TC4 sensory integration ---
     "sub_diff_ccw": (2.0,  4.2),   "sub_diff_cw": (2.0, -4.2),
@@ -86,7 +88,7 @@ NODE_POSITIONS = {
 NODE_LABELS = {
     "bs_ccw": "BS+", "bs_cw": "BS−",
     "ss_ccw": "SS+", "ss_cw": "SS−",
-    "theta_ref_ccw": "θref+", "theta_ref_cw": "θref−",
+    "theta_ref_ccw": "θref=0",   # single shared node; theta_ref_cw is skipped in drawing
     "sub_diff_ccw": "BS−SS+", "sub_diff_cw": "BS−SS−",
     "wg_ccw": "Wg·BS+",      "wg_cw": "Wg·BS−",
     "wp_ccw": "Wp·ΔΘ+",      "wp_cw": "Wp·ΔΘ−",
@@ -214,7 +216,7 @@ def _draw_node(ax, x, y, label, color, node_w=0.68, node_h=0.42):
 # =====================================================================
 # Helper: draw a directed arrow between two node centers
 # =====================================================================
-def _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=0.0):
+def _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=0.0, label=None):
     # shrinkA/B (pixels) clip the arrow to the node border
     ax.annotate(
         "",
@@ -229,19 +231,26 @@ def _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=0.0):
         ),
         zorder=2,
     )
+    if label:
+        mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+        ax.text(mx, my + 0.12, label,
+                ha="center", va="bottom",
+                fontsize=4.5, color=color, zorder=5,
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, pad=0.5))
 
 
 # =====================================================================
 # Main draw function
 # =====================================================================
-def draw_network(neurons, synapses, output_file=None):
+def draw_network(neurons, synapses, output_file=None, log=None):
     """
     Render the TC4 SNS network in McNeal & Hunt 2026 diagram style.
 
     Args:
-        neurons:     dict from build_tc4_network()
-        synapses:    list from build_tc4_network()
+        neurons:     dict from build_neurons()
+        synapses:    list from build_synapses()
         output_file: save path (defaults to SCRIPT_DIR/tc4_network_diagram.png)
+        log:         optional voltage log from run_segment() — overlays final U values
     """
     if output_file is None:
         output_file = os.path.join(SCRIPT_DIR, "tc4_network_diagram.png")
@@ -289,23 +298,49 @@ def draw_network(neurons, synapses, output_file=None):
         x1, y1 = NODE_POSITIONS[syn.pre]
         x2, y2 = NODE_POSITIONS[syn.post]
 
-        is_inhibitory = syn.Es < 0
-        color = "#C0392B" if is_inhibitory else "#27AE60"
-        lw    = 1.8 if is_inhibitory else 1.4
+        # Gate synapses (ΔE=0, Es=-60) are drawn in purple to distinguish from
+        # standard inhibitory (Es=-100). Excitatory = green, standard inh = red.
+        if syn.Es == Er:           # gating synapse (Mult. Syn 2, ΔE=0)
+            color, lw = "#8E44AD", 1.6
+        elif syn.Es < 0:           # standard inhibitory (ΔE=-40, Es=-100)
+            color, lw = "#C0392B", 1.8
+        else:                      # excitatory (ΔE=+194)
+            color, lw = "#27AE60", 1.4
 
         # Slight curve for connections that would otherwise overlap
         rad = 0.0
         if syn.pre == "ib_input":
             rad = 0.1 if "ccw" in syn.post else -0.1
+        # theta_ref is now a single shared node — curve the two branches so they
+        # don't overlap (CCW branch curves up, CW branch curves down)
+        if syn.pre in ("theta_ref_ccw", "theta_ref_cw"):
+            rad = 0.25 if "ccw" in syn.post else -0.25
 
-        _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=rad)
+        # Extract "synN" label from the standardized synapse name "synN_pre_to_post"
+        syn_label = syn.name.split("_")[0]  # e.g. "syn34" from "syn34_kp_mod_ccw_to_kp_prod_ccw"
+
+        _draw_arrow(ax, x1, y1, x2, y2, color, lw, rad=rad, label=syn_label)
 
     # --- Nodes ---
+    # Input neurons whose labels encode a signed angle via bilateral split; when a log
+    # is present we show the true angle (U value) rather than the neuron voltage offset.
+    INPUT_NEURON_NAMES = {
+        "bs_ccw", "bs_cw", "ss_ccw", "ss_cw", "theta_ref_ccw", "theta_ref_cw",
+    }
     for name in NODE_POSITIONS:
         if name not in neurons:
             continue
+        # theta_ref_cw shares the same position as theta_ref_ccw (single shared node);
+        # skip drawing it so only one box appears at that position.
+        if name == "theta_ref_cw":
+            continue
         x, y = NODE_POSITIONS[name]
         label = NODE_LABELS.get(name, name)
+        # When a simulation log is supplied, append the final steady-state U value so
+        # you can read each neuron's operating point directly on the diagram.
+        if log is not None and name in log:
+            U = log[name][-1] - Er   # convert stored voltage V → membrane potential U
+            label += f"\nU={U:+.2f}"
         color = NODE_COLORS.get(name, "#EEEEEE")
         _draw_node(ax, x, y, label, color)
 
@@ -336,6 +371,7 @@ def draw_network(neurons, synapses, output_file=None):
         mpatches.Patch(color="#F39C12", label="Input (bilateral)"),
         mpatches.Patch(color="#27AE60", label="Excitatory synapse"),
         mpatches.Patch(color="#C0392B", label="Inhibitory synapse"),
+        mpatches.Patch(color="#8E44AD", label="Gating synapse (ΔE=0, Es=Er)"),
     ]
     ax.legend(handles=legend_patches,
               loc="lower right", fontsize=7.5,
@@ -381,6 +417,10 @@ def print_synapse_table(neurons, synapses):
 # Entry point
 # =====================================================================
 if __name__ == "__main__":
-    neurons, synapses, bias_neuron_map = build_tc4_network()
+    # Use the decomposed API (same pattern as kp_error_segment.py) rather than the
+    # backward-compat wrapper, so the neuron/synapse objects are available separately
+    # for the table printer and the diagram renderer.
+    neurons  = build_neurons()
+    synapses = build_synapses()
     print_synapse_table(neurons, synapses)
     draw_network(neurons, synapses)
