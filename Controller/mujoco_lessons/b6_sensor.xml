@@ -1,0 +1,20 @@
+<mujoco>
+    <worldbody>
+        <geom type="plane" size="1 1 0.1"/>
+
+        <body name="penulum" pos="0 0 1">
+            <joint name="hinge" type="hinge" axis="0 1 0"/>
+            <inertial mass="1" pos="0 0 -0.2" diaginertia="0.01 0.01 0.01"/>
+            <geom type="box" size="0.1 0.1 0.1" pos="0 0 -0.2"/>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <motor joint="hinge" gear="1" ctrlrange="-1 1"/>
+    </actuator>
+
+    <sensor>
+        <jointpos joint="hinge"/>
+        <jointvel joint="hinge"/>
+    </sensor>
+</mujoco>

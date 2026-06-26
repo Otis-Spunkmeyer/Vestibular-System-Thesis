@@ -1,0 +1,21 @@
+<mujoco>
+    <worldbody>
+        <geom type="plane" size="1 1 0.1"/>
+
+        <body name="surface" pos="0 0 0">
+            <joint name="surface_hinge" type="hinge" axis="0 1 0"/>
+            <inertial mass="0.001" pos="0 0 0" diaginertia="0.0001 0.0001 0.0001"/>
+
+            <body name="ankle" pos="0 0 0">
+                <joint name="ankle_hinge" type="hinge" axis="0 1 0" damping="351.0"/>
+                <inertial mass="77.8" pos="0 0 0.9" diaginertia="0.01 0.01 0.01"/>
+                <geom type="box" size="0.1 0.1 0.4" pos="0 0 0.9"/>
+            </body>
+        </body>
+    </worldbody>
+
+    <sensor>
+        <jointpos joint="surface_hinge"/>
+        <jointpos joint="ankle_hinge"/>
+    </sensor>
+</mujoco>

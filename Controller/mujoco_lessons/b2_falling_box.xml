@@ -1,0 +1,10 @@
+<mujoco>
+    <worldbody>
+        <geom type="plane" size="1 1 0.1"/>
+
+        <body name="box" pos="0 0 1">
+            <freejoint/>
+            <geom type="box" size="0.1 0.1 0.1"/>
+        </body>
+    </worldbody>
+</mujoco>
