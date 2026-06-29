@@ -17,7 +17,8 @@ class BalanceSNS():
     def __init__(self):
         pass
 
-def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> object:
+def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_wt:float=0.5) -> object:
+
     """ 
         SNS stability depends on dt, Cm, Gm, g_{max,i}, and ΔE_{s,i} according to
 
@@ -29,7 +30,19 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
         ctrlr_mode describes the level of development of the controller:
             1: available inputs == kp, kd (kc fused to kd)
             2: available inputs == kp, kd, kc
-            3: available inputs == kp, kd, kc, kt 
+            3: available inputs == kp, kd, kc, kt
+
+        bs_wt (0 to 1) sets the sensory-reweighting split between the graviceptive (bs) and
+        proprioceptive (bf) channels feeding the bilateral error neurons (03_err_CCW/15_err_CW),
+        with bf_wt = 1 - bs_wt computed automatically. Both channels currently share the SAME
+        single external input (01_bf_input) and identical neuron dynamics (TH_err_neuron), since
+        the PRTS test protocol injects only one physical signal at this stage. As a direct
+        consequence, bs_wt currently has NO observable effect on network behavior - bf_err_CCW(t)
+        and bs_err_CCW(t) are identical at every instant, so any weighted split of them produces
+        the same combined result (bf_wt + bs_wt always sums to 1). bs_wt will only become
+        behaviorally meaningful once bf and bs receive genuinely distinct signals - e.g. once this
+        network is driven by a real plant/MuJoCo model that distinguishes surface-relative
+        (proprioceptive) sway from gravity-relative (graviceptive) body sway.
 
         Implementation notes
             The parameter values generally follow those of Hilts, 2018 Thesis with the following exceptions:
@@ -54,6 +67,11 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
     elif ctrlr_mode == 2:
         kt = 0
     
+    # Validate and compute sensory reweighting fractions
+    if not (0 <= bs_wt <= 1):
+        raise ValueError("bs_wt must be between 0 and 1")
+    bf_wt = 1 - bs_wt
+
     """
     Neuron prototypes. 
 
@@ -161,7 +179,24 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
                                 reversal_potential = -100.0)    # Synaptic reversal potential in mV
 
-    # Addition synapses 
+    # Tunable addition/subtraction synapses for bf/bs sensory reweighting
+    bf_add = NonSpikingSynapse(max_conductance = bf_wt*0.115,    # Maximum synaptic conductance, g_s, in uS
+                                e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
+                                reversal_potential = 134.0)     # Synaptic reversal potential in mV
+
+    bs_add = NonSpikingSynapse(max_conductance = bs_wt*0.115,    # Maximum synaptic conductance, g_s, in uS
+                                e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
+                                reversal_potential = 134.0)     # Synaptic reversal potential in mV
+
+    bf_sub = NonSpikingSynapse(max_conductance = bf_wt*0.55775,  # Maximum synaptic conductance, g_s, in uS
+                                e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
+                                reversal_potential = -100.0)    # Synaptic reversal potential in mV
+
+    bs_sub = NonSpikingSynapse(max_conductance = bs_wt*0.55775,  # Maximum synaptic conductance, g_s, in uS
+                                e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
+                                reversal_potential = -100.0)    # Synaptic reversal potential in mV
+
+    # Addition synapses
     kp_asyn = NonSpikingSynapse(max_conductance = 0.115,        # Maximum synaptic conductance, g_s, in uS
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
                                 reversal_potential = 134.0)     # Synaptic reversal potential in mV
@@ -195,10 +230,14 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
     net = Network(name = 'Balance Model SNS')
 
     # Add error calculation neurons to the network
-    net.add_neuron(input_ref_neuron,    name='01_input'         , color='lightblue')  # Anke angle, Theta
-    net.add_neuron(input_ref_neuron,    name='02_ref'           , color='lightblue')  # Ankle reference angle (0)
+    net.add_neuron(input_ref_neuron,    name='01_bf_input'      , color='lightblue')  # Ankle angle, Theta (proprioceptive/bf; PRTS injected here)
+    net.add_neuron(input_ref_neuron,    name='02_bf_ref'        , color='lightblue')  # bf reference angle (0)
     net.add_neuron(TH_err_neuron,       name='03_err_CCW'       , color='lightblue')  # CCW error calc output
     net.add_neuron(TH_err_neuron,       name='15_err_CW'        , color='lightblue')  # CW error calc output
+    net.add_neuron(TH_err_neuron,       name='33_bf_err_CCW'    , color='lightblue')  # bf (proprioceptive) channel CCW error
+    net.add_neuron(TH_err_neuron,       name='34_bf_err_CW'     , color='yellow')     # bf (proprioceptive) channel CW error
+    net.add_neuron(TH_err_neuron,       name='35_bs_err_CCW'    , color='lightblue')  # bs (graviceptive) channel CCW error
+    net.add_neuron(TH_err_neuron,       name='36_bs_err_CW'     , color='yellow')     # bs (graviceptive) channel CW error
 
     # Add differential calculation neurons to the network
     net.add_neuron(t1_neuron,           name='04_t1'            , color='blue')       # CCW differntial term t1
@@ -249,10 +288,27 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
     Synapse naming convention: 'syn_<synapse #>_<Upre #>_<Upost #>'
     """
     # Add error calculation synapses to the network
-    net.add_connection(sub_pos,     '01_input'          , '03_err_CCW'      , name='syn_01_01_03') #synapse 1
-    net.add_connection(sub_neg,     '02_ref'            , '03_err_CCW'      , name='syn_02_02_03') #synapse 2
-    net.add_connection(sub_neg,     '01_input'          , '15_err_CW'       , name='syn_18_01_15') #synapse 18
-    net.add_connection(sub_pos,     '02_ref'            , '15_err_CW'       , name='syn_19_02_15') #synapse 19
+    net.add_connection(sub_pos,     '01_bf_input'       , '33_bf_err_CCW'   , name='syn_01_01_03') #synapse 1
+    net.add_connection(sub_neg,     '02_bf_ref'         , '33_bf_err_CCW'   , name='syn_02_02_03') #synapse 2
+    net.add_connection(sub_neg,     '01_bf_input'       , '34_bf_err_CW'    , name='syn_18_01_15') #synapse 18
+    net.add_connection(sub_pos,     '02_bf_ref'         , '34_bf_err_CW'    , name='syn_19_02_15') #synapse 19
+
+    # Graviceptive (bs) channel error calc - reads the SAME single external input as bf (no second input)
+    net.add_connection(sub_pos,     '01_bf_input'       , '35_bs_err_CCW'   , name='syn_50_01_35') #synapse 50
+    net.add_connection(sub_neg,     '02_bf_ref'         , '35_bs_err_CCW'   , name='syn_51_02_35') #synapse 51
+    net.add_connection(sub_neg,     '01_bf_input'       , '36_bs_err_CW'    , name='syn_52_01_36') #synapse 52
+    net.add_connection(sub_pos,     '02_bf_ref'         , '36_bs_err_CW'    , name='syn_53_02_36') #synapse 53
+
+    # Recombine bf/bs channel errors into the final bilateral error, weighted by bf_wt/bs_wt
+    net.add_connection(bf_add,      '33_bf_err_CCW'     , '03_err_CCW'      , name='syn_60_33_03') #synapse 60
+    net.add_connection(bs_add,      '35_bs_err_CCW'     , '03_err_CCW'      , name='syn_61_35_03') #synapse 61
+    net.add_connection(bf_add,      '34_bf_err_CW'      , '15_err_CW'       , name='syn_62_34_15') #synapse 62
+    net.add_connection(bs_add,      '36_bs_err_CW'      , '15_err_CW'       , name='syn_63_36_15') #synapse 63
+
+    net.add_connection(bf_sub,      '33_bf_err_CCW'     , '15_err_CW'       , name='syn_64_33_15') #synapse 64
+    net.add_connection(bs_sub,      '35_bs_err_CCW'     , '15_err_CW'       , name='syn_65_35_15') #synapse 65
+    net.add_connection(bf_sub,      '34_bf_err_CW'      , '03_err_CCW'      , name='syn_66_34_03') #synapse 66
+    net.add_connection(bs_sub,      '36_bs_err_CW'      , '03_err_CCW'      , name='syn_67_36_03') #synapse 67
 
     # Add differential calculation routing synapses to the network
     net.add_connection(add_syn,     '03_err_CCW'        , '04_t1'           , name='syn_03_03_04') #synapse 3
@@ -326,7 +382,7 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
     ==================
     """
     # Add ankle angle input to the network. Note: adapters are external to this SNS model
-    net.add_input(dest="01_input")
+    net.add_input(dest="01_bf_input")
 
     # Add Ib Feedback inputs to the network. Note: adapters are external to this SNS model
     net.add_input(dest='25_kt_x_t', name='Flx_Ib', color='white')
@@ -349,8 +405,14 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False) -> 
         net.add_output('13_kd_x_err')
         net.add_output('29_kc_x_err')#'30_kc_x_err'
 
-        net.add_output('01_input')
-    # net.add_output('02_ref')
+        net.add_output('01_bf_input')
+
+        # Add bf/bs sensory reweighting tracking outputs
+        net.add_output('33_bf_err_CCW')
+        net.add_output('34_bf_err_CW')
+        net.add_output('35_bs_err_CCW')
+        net.add_output('36_bs_err_CW')
+    # net.add_output('02_bf_ref')
     # net.add_output('03_err_CCW')
 
     # Add outputs for measuring Kp vs Kd
