@@ -1,0 +1,158 @@
+import sys
+import os
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, os.path.abspath('..'))
+
+import numpy as np
+import mujoco
+import mujoco.viewer
+import balance
+
+from prts_generator import generate_prts
+
+# __ MujoCo __________________________________
+model = mujoco.MjModel.from_xml_path("e6_bilateral.xml")
+data = mujoco.MjData(model)
+
+dt_s = model.opt.timestep       # 0.0001 s
+dt_ms = dt_s * 1000             # 0.1 ms (sns_toolbox uses ms)
+
+# __ sns network_______________________________
+gains = (1.0, 1.0, 1.0, 1.0)    # (kp, kd, kc, kt) -use PSO to tune to actual
+net = balance.generate_sns(gains, ctrlr_mode=3, bs_wt=0.3)
+sns = net.compile(backend='numpy', dt=dt_ms, debug=False)
+
+n_inputs = net.get_num_inputs()
+n_outputs = net.get_num_outputs()
+
+print(f"Mujoco Timestep:    {dt_s*1000:.2f} ms")
+print(f"SNS dt:             {dt_ms:.2f} ms")
+print(f"SNS inputs:         {n_inputs}")
+print(f"SNS outputs:        {n_outputs}")
+print("Skeleton OK")
+
+# ── PRTS surface perturbation ────────────────────────────────────────────────
+prts_t, prts_pos = generate_prts(v_amp=np.deg2rad(1.0), dt=dt_s)
+prts_pos = prts_pos - prts_pos.mean()   # center around 0 so platform tilts both ways
+prts_vel = np.zeros_like(prts_pos)
+prts_vel[1:] = np.diff(prts_pos) / dt_s   # numerical velocity for kinematic drive
+
+print(f"PRTS duration:    {prts_t[-1]:.1f} s  ({len(prts_pos)} steps)")
+
+
+#__ Input adapters_________________________________
+IB_SCALE = 10/ 1500.0           # nA per Newton (10nA max / 1500N Fmax)
+IB_CLIP  = 10.0                 # nA saturation limit
+DEG_MAX  = 10.0                 # operating limit in degrees
+R        = 20.0                 # SNS operating range in mV (= nA here)
+
+def angle_to_na(angle_rad):
+    deg = np.degrees(angle_rad)
+    return float(np.clip(deg /DEG_MAX * (R / 2), -R / 2, R / 2))
+
+def tension_to_ib_na(force_n):
+    return float(np.clip(abs(force_n) * IB_SCALE, 0.0, IB_CLIP))
+
+# pre-allocate inputs with input vector
+inputs = np.zeros(n_inputs)
+
+print("Adaptors OK - Test:")
+inputs[0] = angle_to_na(np.radians(5.0))
+inputs[1] = tension_to_ib_na(300.0)
+inputs[2] = tension_to_ib_na(0.0)
+
+print(f"5 deg to {inputs[0]:.3f} nA (expect 5.000)")
+print(f"300 N to {inputs[1]:.3f} nA (expect 2.000)")
+
+#__ Output adapters_________________________________
+Er = -60.0                      # Neuron resting potential
+
+def v_to_activation(v_mv):
+    return float(np.clip((v_mv - Er) / R, 0.0, 1.0))
+
+print(f"Output adapter OK — test:")
+print(f"  -60 mV to {v_to_activation(-60.0):.3f}  (expect 0.0, fully relaxed)")
+print(f"  -50 mV to {v_to_activation(-50.0):.3f}  (expect 0.5, half activated)")
+print(f"  -40 mV to {v_to_activation(-40.0):.3f}  (expect 1.0, fully activated)")
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+n_steps      = len(prts_pos)
+time_log     = np.zeros(n_steps)
+surface_log  = np.zeros(n_steps)   # surface sway (deg)
+ankle_log    = np.zeros(n_steps)   # ankle angle rel. to surface (deg)
+body_abs_log = np.zeros(n_steps)   # absolute body angle in world (deg)
+ctrl_ccw_log = np.zeros(n_steps)   # CCW muscle activation [0,1]
+ctrl_cw_log  = np.zeros(n_steps)   # CW muscle activation [0,1]
+sns_ccw_log  = np.zeros(n_steps)   # SNS CCW PD output voltage (mV)
+sns_cw_log   = np.zeros(n_steps)   # SNS CW PD output voltage (mV)
+
+#__ Simulation ______________________________________
+data.qpos[0] = 0.0   # surface starts flat
+data.qpos[1] = 0.0   # ankle starts upright relative to surface
+
+with mujoco.viewer.launch_passive(model, data) as viewer:
+    for step in range(len(prts_pos)):
+        if not viewer.is_running():
+            break
+
+        # Drive surface joint kinematically from PRTS
+        data.qpos[0] = prts_pos[step]
+        data.qvel[0] = prts_vel[step]
+
+        # 1. Proprioceptive input: ankle angle relative to surface (qpos[1], not qpos[0])
+        inputs[0] = angle_to_na(data.qpos[1])
+
+        # 2. Ib tension feedback
+        inputs[1] = tension_to_ib_na(data.actuator_force[1])
+        inputs[2] = tension_to_ib_na(data.actuator_force[0])
+
+        # 3. Step SNS
+        outputs = sns(inputs)
+
+        # 4. Apply muscle activations
+        data.ctrl[0] = v_to_activation(outputs[0])
+        data.ctrl[1] = v_to_activation(outputs[1])
+
+        # 5. Step physics
+        mujoco.mj_step(model, data)
+        time_log[step]     = data.time
+        surface_log[step]  = np.degrees(data.qpos[0])
+        ankle_log[step]    = np.degrees(data.qpos[1])
+        body_abs_log[step] = surface_log[step] + ankle_log[step]
+        ctrl_ccw_log[step] = data.ctrl[0]
+        ctrl_cw_log[step]  = data.ctrl[1]
+        sns_ccw_log[step]  = outputs[0]
+        sns_cw_log[step]   = outputs[1]
+
+        # 6. Update viewer
+        viewer.sync()
+
+# ── Plotting ──────────────────────────────────────────────────────────────────
+ds = 100   # downsample: every 100 steps = 10 ms resolution (6050 points total)
+t  = time_log[::ds]
+
+fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True, constrained_layout=True)
+
+axes[0].plot(t, surface_log[::ds],  label='Surface sway (PRTS)', color='gray',   lw=0.8)
+axes[0].plot(t, body_abs_log[::ds], label='Body angle (world)',  color='blue',   lw=0.8)
+axes[0].set_ylabel('Angle (deg)')
+axes[0].set_title('Surface perturbation vs body response')
+axes[0].legend()
+axes[0].grid(True)
+
+axes[1].plot(t, ankle_log[::ds], label='Ankle angle (rel. to surface)', color='green', lw=0.8)
+axes[1].set_ylabel('Angle (deg)')
+axes[1].set_title('Proprioceptive signal fed to SNS')
+axes[1].legend()
+axes[1].grid(True)
+
+axes[2].plot(t, ctrl_ccw_log[::ds], label='CCW activation', color='orange', lw=0.8)
+axes[2].plot(t, ctrl_cw_log[::ds],  label='CW activation',  color='red',    lw=0.8)
+axes[2].set_ylabel('Activation [0, 1]')
+axes[2].set_xlabel('Time (s)')
+axes[2].set_title('Hill muscle activations')
+axes[2].legend()
+axes[2].grid(True)
+
+plt.show()
