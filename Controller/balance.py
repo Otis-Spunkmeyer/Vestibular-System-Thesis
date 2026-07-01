@@ -240,6 +240,8 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     net.add_neuron(TH_err_neuron,       name='34_bf_err_CW'     , color='yellow')     # bf (proprioceptive) channel CW error
     net.add_neuron(TH_err_neuron,       name='35_bs_err_CCW'    , color='lightblue')  # bs (graviceptive) channel CCW error
     net.add_neuron(TH_err_neuron,       name='36_bs_err_CW'     , color='yellow')     # bs (graviceptive) channel CW error
+    net.add_neuron(input_ref_neuron,    name='37_bs_input'      , color='lightgreen') # Body-in-space angle (graviceptive; IMU-fused or sim proxy)
+    net.add_neuron(input_ref_neuron,    name='38_bs_ref'        , color='lightgreen') # bs reference angle (0)
 
     # Add differential calculation neurons to the network
     net.add_neuron(t1_neuron,           name='04_t1'            , color='blue')       # CCW differntial term t1
@@ -295,11 +297,11 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     net.add_connection(sub_neg,     '01_bf_input'       , '34_bf_err_CW'    , name='syn_18_01_15') #synapse 18
     net.add_connection(sub_pos,     '02_bf_ref'         , '34_bf_err_CW'    , name='syn_19_02_15') #synapse 19
 
-    # Graviceptive (bs) channel error calc - reads the SAME single external input as bf (no second input)
-    net.add_connection(sub_pos,     '01_bf_input'       , '35_bs_err_CCW'   , name='syn_50_01_35') #synapse 50
-    net.add_connection(sub_neg,     '02_bf_ref'         , '35_bs_err_CCW'   , name='syn_51_02_35') #synapse 51
-    net.add_connection(sub_neg,     '01_bf_input'       , '36_bs_err_CW'    , name='syn_52_01_36') #synapse 52
-    net.add_connection(sub_pos,     '02_bf_ref'         , '36_bs_err_CW'    , name='syn_53_02_36') #synapse 53
+    # Graviceptive (bs) channel error calc - reads dedicated 37_bs_input (IMU-fused or sim proxy)
+    net.add_connection(sub_pos,     '37_bs_input'       , '35_bs_err_CCW'   , name='syn_50_37_35') #synapse 50
+    net.add_connection(sub_neg,     '38_bs_ref'         , '35_bs_err_CCW'   , name='syn_51_38_35') #synapse 51
+    net.add_connection(sub_neg,     '37_bs_input'       , '36_bs_err_CW'    , name='syn_52_37_36') #synapse 52
+    net.add_connection(sub_pos,     '38_bs_ref'         , '36_bs_err_CW'    , name='syn_53_38_36') #synapse 53
 
     # Recombine bf/bs channel errors into the final bilateral error, weighted by bf_wt/bs_wt
     net.add_connection(bf_add,      '33_bf_err_CCW'     , '03_err_CCW'      , name='syn_60_33_03') #synapse 60
@@ -385,6 +387,9 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     """
     # Add ankle angle input to the network. Note: adapters are external to this SNS model
     net.add_input(dest="01_bf_input")
+
+    # Add graviceptive (bs) input — body-in-space angle from IMU sensor fusion or sim proxy
+    net.add_input(dest='37_bs_input', name='BS_angle', color='lightgreen')
 
     # Add Ib Feedback inputs to the network. Note: adapters are external to this SNS model
     net.add_input(dest='25_kt_x_t', name='Flx_Ib', color='white')
