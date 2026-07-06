@@ -10,6 +10,7 @@ import mujoco.viewer
 import balance
 
 from prts_generator import generate_prts
+from complementary_filter import ComplementaryFilter
 
 # __ MujoCo __________________________________
 model = mujoco.MjModel.from_xml_path("e6_bilateral.xml")
@@ -40,6 +41,18 @@ prts_vel[1:] = np.diff(prts_pos) / dt_s   # numerical velocity for kinematic dri
 
 print(f"PRTS duration:    {prts_t[-1]:.1f} s  ({len(prts_pos)} steps)")
 
+# __Mode selection_________________________________
+print("\nSelect simulation mode:")
+print("  1 — PRTS test     (bs mirrors bf; proprioceptive only)")
+print("  2 — Sim proxy     (bs = MuJoCo world-frame body angle, no filter)")
+print("  3 — Sim + filter  (bs = synthetic IMU → complementary filter)")
+print("  4 — Real IMU      (bs = live IMU reads → complementary filter)")
+mode = int(input("Mode [1/2/3/4]: "))
+if mode not in (1, 2, 3, 4):
+    raise ValueError(f"Invalid mode: {mode}")
+
+cf = ComplementaryFilter() if mode in (3, 4) else None
+print(f"Running in mode {mode}")
 
 #__ Input adapters_________________________________
 IB_SCALE = 10/ 1500.0           # nA per Newton (10nA max / 1500N Fmax)
@@ -59,11 +72,14 @@ inputs = np.zeros(n_inputs)
 
 print("Adaptors OK - Test:")
 inputs[0] = angle_to_na(np.radians(5.0))
-inputs[1] = tension_to_ib_na(300.0)
-inputs[2] = tension_to_ib_na(0.0)
+inputs[1] = angle_to_na(np.radians(5.0))   # bs same as bf for this static test
+inputs[2] = tension_to_ib_na(300.0)
+inputs[3] = tension_to_ib_na(0.0)
 
-print(f"5 deg to {inputs[0]:.3f} nA (expect 5.000)")
-print(f"300 N to {inputs[1]:.3f} nA (expect 2.000)")
+print(f"5 deg → {inputs[0]:.3f} nA (expect  5.000)  [bf ankle]")
+print(f"5 deg → {inputs[1]:.3f} nA (expect  5.000)  [bs body]")
+print(f"300 N → {inputs[2]:.3f} nA (expect  2.000)  [Flx_Ib]")
+
 
 #__ Output adapters_________________________________
 Er = -60.0                      # Neuron resting potential
@@ -100,21 +116,37 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         data.qpos[0] = prts_pos[step]
         data.qvel[0] = prts_vel[step]
 
-        # 1. Proprioceptive input: ankle angle relative to surface (qpos[1], not qpos[0])
+        # 1. Proprioceptive input (bf): ankle angle relative to surface
         inputs[0] = angle_to_na(data.qpos[1])
 
-        # 2. Ib tension feedback
-        inputs[1] = tension_to_ib_na(data.actuator_force[1])
-        inputs[2] = tension_to_ib_na(data.actuator_force[0])
+        # 2. Graviceptive input (bs): mode-dependent body-in-space estimate
+        if mode == 1:
+            inputs[1] = inputs[0]                                  # mirrors bf; bs_wt has no effect
+        elif mode == 2:
+            inputs[1] = angle_to_na(data.qpos[0] + data.qpos[1])  # world-frame body angle, no filter
+        elif mode == 3:
+            body_angle = data.qpos[0] + data.qpos[1]              # synthetic IMU from MuJoCo truth
+            body_vel   = data.qvel[0] + data.qvel[1]
+            acc_sim    = [np.sin(body_angle) * 9.81, np.cos(body_angle) * 9.81]
+            inputs[1]  = angle_to_na(cf.update(body_vel, body_vel, acc_sim, acc_sim, dt_s))
+        elif mode == 4:
+            gyro1, acc1 = imu1.read()                              # TODO: replace with real IMU calls
+            gyro2, acc2 = imu2.read()
+            inputs[1]   = angle_to_na(cf.update(gyro1, gyro2, acc1, acc2, dt_s))
 
-        # 3. Step SNS
+        # 3. Ib tension feedback
+        inputs[2] = tension_to_ib_na(data.actuator_force[1])  # Flx_Ib
+        inputs[3] = tension_to_ib_na(data.actuator_force[0])  # Ext_Ib
+
+
+        # 4. Step SNS
         outputs = sns(inputs)
 
-        # 4. Apply muscle activations
+        # 5. Apply muscle activations
         data.ctrl[0] = v_to_activation(outputs[0])
         data.ctrl[1] = v_to_activation(outputs[1])
 
-        # 5. Step physics
+        # 6. Step physics
         mujoco.mj_step(model, data)
         time_log[step]     = data.time
         surface_log[step]  = np.degrees(data.qpos[0])
@@ -125,7 +157,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         sns_ccw_log[step]  = outputs[0]
         sns_cw_log[step]   = outputs[1]
 
-        # 6. Update viewer
+        # 7. Update viewer
         viewer.sync()
 
 # ── Plotting ──────────────────────────────────────────────────────────────────
