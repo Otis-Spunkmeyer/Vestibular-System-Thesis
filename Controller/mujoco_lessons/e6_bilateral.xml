@@ -1,23 +1,110 @@
 <mujoco>
+    <compiler angle="radian"/>
     <option timestep="0.0001"/>
 
+    <asset>
+        <texture name="sky" type="skybox" builtin="gradient"
+             rgb1="0.9 0.9 0.95"
+             rgb2="0.6 0.7 0.9"
+             width="512" height="512"/>
+        <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3"
+          rgb2=".2 .3 .4" width="300" height="300"/>
+        <material name="grid" texture="grid" texrepeat="8 8" reflectance=".2"/>
+    </asset>
+
+    <default>
+        <camera pos="-2.945 -4.387 2.734" xyaxes="0.838 -0.545 0.000 0.163 0.251 0.954"/>
+        <tendon width="0.01" rgba="0.8 0.2 0.2 1"/>
+        <default class="muscle">
+            <muscle ctrllimited="true" ctrlrange="0 1" force="1500"/>
+        </default>
+    </default>
+
     <worldbody>
-        <geom type="plane" size="1 1 0.1"/>
+        <geom size="2 2 .01" type="plane" material="grid" pos="0 0 0"/>
+        <camera pos="-2.945 -4.387 2.734" xyaxes="0.838 -0.545 0.000 0.163 0.251 0.954"/>
 
-        <body name="surface" pos="0 0 0">
-            <joint name="surface_hinge" type="hinge" axis="0 1 0"/>
-            <inertial mass="0.001" pos="0 0 0" diaginertia="0.0001 0.0001 0.0001"/>
+        <light name="top" pos="-.5 -.5 3"/>
+        <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1"/>
 
-            <body name="ankle" pos="0 0 0">
-                <joint name="ankle_hinge" type="hinge" axis="0 1 0" damping="351.0" limited="true" range="-0.1745 0.1745"/>
-                <inertial mass="77.8" pos="0 0 0.9" diaginertia="0.01 0.01 0.01"/>
-                <geom type="box" size="0.1 0.1 0.4" pos="0 0 0.9"/>
+        <!-- Kinematic driver set each step via data.qpos[0] (platform_joint) -->
+        <body name="plat_ref" mocap="true" pos="0 0 0.428" quat="1 0 0 0">
+            <site name="platref_glue" pos="0 0 0" size="0.005"/>
+        </body>
+
+        <body name="platform_base">
+            <geom name="base"    type="box" pos="0 0 .125"     mass="100000.0" size=".75 .75 .125"   rgba=".8 .8 .7 1"/>
+            <geom name="upright1" type="box" pos="0 0.725 .25" size=".5 .025 .25"                    rgba=".8 .8 .7 1"/>
+
+            <body name="oscillating_platform">
+                <joint name="platform_joint" type="hinge" axis="0 1 0" pos="0 0 0.428"/>
+                <site name="plat_hinge_glue" pos="0 0 0.428" size="0.005"/>
+
+                <geom name="platform" type="box" pos="0 0 .325"      size=".65 .65 .025"           rgba="0 1 0 1"/>
+                <geom name="strut1"   type="box" pos="0  0.625 .355" size="0.125 0.025 0.055"      rgba="0 1 0 1"/>
+                <geom name="strut2"   type="box" pos="0 -0.625 .355" size="0.125 0.025 0.055"      rgba="0 1 0 1"/>
+                <site name="plat_glue" pos="0 0 0.349" size="0.01" type="sphere"/>
+            </body>
+        </body>
+
+        <body name="balancing_person" pos="0 0 0.355">
+            <joint type="free"/>
+            <body name="foot">
+                <geom name="foot" type="box" pos="0 0 .021" size=".35 .35 .025" mass="5" rgba=".8 .4 .4 1"/>
+                <site name="ext_foot_site" pos="0.049 0 0.046"/>
+                <site name="flx_foot_site" pos="-0.049 0 0.046"/>
+                <site name="foot_glue" pos="0 0 -0.00395" size="0.01" type="sphere"/>
+
+                <body name="block_body" euler="0 0 0">
+                    <joint
+                        name="ankle_joint"
+                        type="hinge"
+                        axis="0 1 0"
+                        pos="0 0 0.073"
+                        range="-0.3 0.3"
+                        frictionloss="0.0001"
+                    />
+                    <geom name="body" type="box" pos="0 0 1.0" size=".045 .3 0.9" rgba=".4 .4 1 1" mass="77.8"/>
+                    <site name="ext_body_site" pos="0.049 0 0.456"/>
+                    <site name="flx_body_site" pos="-0.049 0 0.456"/>
+                </body>
             </body>
         </body>
     </worldbody>
 
+    <equality>
+        <!-- Weld foot rigidly to the oscillating platform -->
+        <weld name="foot_to_ref"
+            site1="foot_glue" site2="plat_glue"
+            active="true" solref="0.002 1" solimp="0.99 0.999 0.0001"/>
+
+        <!-- Mocap weld: disabled by default; enable to drive platform via data.mocap_quat -->
+        <weld name="platform_to_ref"
+            site1="plat_hinge_glue" site2="platref_glue"
+            active="false" solref="0.002 1" solimp="0.9 0.95 0.001"/>
+    </equality>
+
+    <tendon>
+        <spatial name="Ext_tendon">
+            <site site="ext_body_site"/>
+            <site site="ext_foot_site"/>
+        </spatial>
+        <spatial name="Flx_tendon">
+            <site site="flx_body_site"/>
+            <site site="flx_foot_site"/>
+        </spatial>
+    </tendon>
+
     <actuator>
-        <muscle name="ccw" joint="ankle_hinge" gear="1"  force="1500" range="0.75 1.05" lengthrange="-0.1745 0.1745" ctrlrange="0 1"/>
-        <muscle name="cw"  joint="ankle_hinge" gear="-1" force="1500" range="0.75 1.05" lengthrange="-0.1745 0.1745" ctrlrange="0 1"/>
+        <!-- ctrl[0] = Flx_muscle (flexor / tibialis anterior) -->
+        <muscle name="Flx_muscle" tendon="Flx_tendon" class="muscle"/>
+        <!-- ctrl[1] = Ext_muscle (extensor / gastrocnemius) -->
+        <muscle name="Ext_muscle" tendon="Ext_tendon" class="muscle"/>
     </actuator>
+
+    <sensor>
+        <jointpos joint="ankle_joint"    name="ankle_joint_sensor"/>
+        <jointpos joint="platform_joint" name="platform_joint_sensor"/>
+    </sensor>
+
 </mujoco>

@@ -20,7 +20,7 @@ dt_s = model.opt.timestep       # 0.0001 s
 dt_ms = dt_s * 1000             # 0.1 ms (sns_toolbox uses ms)
 
 # __ sns network_______________________________
-gains = (1.0, 1.0, 1.0, 1.0)    # (kp, kd, kc, kt) -use PSO to tune to actual
+gains = (4.26, 5.01, 2.48, 5.42)    # (kp, kd, kc, kt) -use PSO to tune to actual
 net = balance.generate_sns(gains, ctrlr_mode=3, bs_wt=0.3)
 sns = net.compile(backend='numpy', dt=dt_ms, debug=False)
 
@@ -98,14 +98,14 @@ time_log     = np.zeros(n_steps)
 surface_log  = np.zeros(n_steps)   # surface sway (deg)
 ankle_log    = np.zeros(n_steps)   # ankle angle rel. to surface (deg)
 body_abs_log = np.zeros(n_steps)   # absolute body angle in world (deg)
-ctrl_ccw_log = np.zeros(n_steps)   # CCW muscle activation [0,1]
-ctrl_cw_log  = np.zeros(n_steps)   # CW muscle activation [0,1]
-sns_ccw_log  = np.zeros(n_steps)   # SNS CCW PD output voltage (mV)
-sns_cw_log   = np.zeros(n_steps)   # SNS CW PD output voltage (mV)
+ctrl_ccw_log = np.zeros(n_steps)   # Flx_muscle activation [0,1]  (ctrl[0])
+ctrl_cw_log  = np.zeros(n_steps)   # Ext_muscle activation [0,1]  (ctrl[1])
+sns_ccw_log  = np.zeros(n_steps)   # SNS extensor output voltage (mV)  (outputs[0])
+sns_cw_log   = np.zeros(n_steps)   # SNS flexor  output voltage (mV)  (outputs[1])
 
 #__ Simulation ______________________________________
-data.qpos[0] = 0.0   # surface starts flat
-data.qpos[1] = 0.0   # ankle starts upright relative to surface
+data.qpos[0] = 0.0   # platform starts flat
+data.qpos[8] = 0.0   # ankle starts upright relative to platform
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
     for step in range(len(prts_pos)):
@@ -116,17 +116,17 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         data.qpos[0] = prts_pos[step]
         data.qvel[0] = prts_vel[step]
 
-        # 1. Proprioceptive input (bf): ankle angle relative to surface
-        inputs[0] = angle_to_na(data.qpos[1])
+        # 1. Proprioceptive input (bf): ankle angle relative to platform
+        inputs[0] = angle_to_na(data.qpos[8])
 
         # 2. Graviceptive input (bs): mode-dependent body-in-space estimate
         if mode == 1:
             inputs[1] = inputs[0]                                  # mirrors bf; bs_wt has no effect
         elif mode == 2:
-            inputs[1] = angle_to_na(data.qpos[0] + data.qpos[1])  # world-frame body angle, no filter
+            inputs[1] = angle_to_na(data.qpos[0] + data.qpos[8])  # world-frame body angle, no filter
         elif mode == 3:
-            body_angle = data.qpos[0] + data.qpos[1]              # synthetic IMU from MuJoCo truth
-            body_vel   = data.qvel[0] + data.qvel[1]
+            body_angle = data.qpos[0] + data.qpos[8]              # synthetic IMU from MuJoCo truth
+            body_vel   = data.qvel[0] + data.qvel[7]
             acc_sim    = [np.sin(body_angle) * 9.81, np.cos(body_angle) * 9.81]
             inputs[1]  = angle_to_na(cf.update(body_vel, body_vel, acc_sim, acc_sim, dt_s))
         elif mode == 4:
@@ -135,22 +135,22 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             inputs[1]   = angle_to_na(cf.update(gyro1, gyro2, acc1, acc2, dt_s))
 
         # 3. Ib tension feedback
-        inputs[2] = tension_to_ib_na(data.actuator_force[1])  # Flx_Ib
-        inputs[3] = tension_to_ib_na(data.actuator_force[0])  # Ext_Ib
+        inputs[2] = tension_to_ib_na(data.actuator_force[0])  # Flx_Ib  (Flx_muscle = ctrl[0])
+        inputs[3] = tension_to_ib_na(data.actuator_force[1])  # Ext_Ib  (Ext_muscle = ctrl[1])
 
 
         # 4. Step SNS
         outputs = sns(inputs)
 
         # 5. Apply muscle activations
-        data.ctrl[0] = v_to_activation(outputs[0])
-        data.ctrl[1] = v_to_activation(outputs[1])
+        data.ctrl[0] = v_to_activation(outputs[1])  # Flx_muscle → flexor  output
+        data.ctrl[1] = v_to_activation(outputs[0])  # Ext_muscle → extensor output
 
         # 6. Step physics
         mujoco.mj_step(model, data)
         time_log[step]     = data.time
         surface_log[step]  = np.degrees(data.qpos[0])
-        ankle_log[step]    = np.degrees(data.qpos[1])
+        ankle_log[step]    = np.degrees(data.qpos[8])
         body_abs_log[step] = surface_log[step] + ankle_log[step]
         ctrl_ccw_log[step] = data.ctrl[0]
         ctrl_cw_log[step]  = data.ctrl[1]
@@ -161,26 +161,26 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.sync()
 
 # ── Plotting ──────────────────────────────────────────────────────────────────
-ds = 100   # downsample: every 100 steps = 10 ms resolution (6050 points total)
+ds = 500   # downsample: every 500 steps = 50 ms resolution (~1210 points total)
 t  = time_log[::ds]
 
 fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True, constrained_layout=True)
 
-axes[0].plot(t, surface_log[::ds],  label='Surface sway (PRTS)', color='gray',   lw=0.8)
-axes[0].plot(t, body_abs_log[::ds], label='Body angle (world)',  color='blue',   lw=0.8)
+axes[0].scatter(t, surface_log[::ds],  label='Surface sway (PRTS)', color='gray',   s=1.5)
+axes[0].scatter(t, body_abs_log[::ds], label='Body angle (world)',  color='blue',   s=1.5)
 axes[0].set_ylabel('Angle (deg)')
 axes[0].set_title('Surface perturbation vs body response')
 axes[0].legend()
 axes[0].grid(True)
 
-axes[1].plot(t, ankle_log[::ds], label='Ankle angle (rel. to surface)', color='green', lw=0.8)
+axes[1].scatter(t, ankle_log[::ds], label='Ankle angle (rel. to surface)', color='green', s=1.5)
 axes[1].set_ylabel('Angle (deg)')
 axes[1].set_title('Proprioceptive signal fed to SNS')
 axes[1].legend()
 axes[1].grid(True)
 
-axes[2].plot(t, ctrl_ccw_log[::ds], label='CCW activation', color='orange', lw=0.8)
-axes[2].plot(t, ctrl_cw_log[::ds],  label='CW activation',  color='red',    lw=0.8)
+axes[2].scatter(t, ctrl_ccw_log[::ds], label='Flx activation', color='orange', s=1.5)
+axes[2].scatter(t, ctrl_cw_log[::ds],  label='Ext activation', color='red',    s=1.5)
 axes[2].set_ylabel('Activation [0, 1]')
 axes[2].set_xlabel('Time (s)')
 axes[2].set_title('Hill muscle activations')

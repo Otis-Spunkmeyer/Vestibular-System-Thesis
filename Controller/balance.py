@@ -419,8 +419,9 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
         net.add_output('34_bf_err_CW')
         net.add_output('35_bs_err_CCW')
         net.add_output('36_bs_err_CW')
+        net.add_output('03_err_CCW')   # combined weighted CCW error neuron
+        net.add_output('15_err_CW')    # combined weighted CW error neuron
     # net.add_output('02_bf_ref')
-    # net.add_output('03_err_CCW')
 
     # Add outputs for measuring Kp vs Kd
     # net.add_output('10_kp_x_err')
