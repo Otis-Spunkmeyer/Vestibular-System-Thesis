@@ -16,7 +16,7 @@
         <camera pos="-2.945 -4.387 2.734" xyaxes="0.838 -0.545 0.000 0.163 0.251 0.954"/>
         <tendon width="0.01" rgba="0.8 0.2 0.2 1"/>
         <default class="muscle">
-            <muscle ctrllimited="true" ctrlrange="0 1" force="1500"/>
+            <muscle ctrllimited="true" ctrlrange="0 1" force="1300"/>
         </default>
     </default>
 
@@ -51,8 +51,8 @@
             <joint type="free"/>
             <body name="foot">
                 <geom name="foot" type="box" pos="0 0 .021" size=".35 .35 .025" mass="5" rgba=".8 .4 .4 1"/>
-                <site name="ext_foot_site" pos="0.049 0 0.046"/>
-                <site name="flx_foot_site" pos="-0.049 0 0.046"/>
+                <site name="ext_foot_site" pos="-0.065 0 0.046"/>
+                <site name="flx_foot_site" pos="0.065 0 0.046"/>
                 <site name="foot_glue" pos="0 0 -0.00395" size="0.01" type="sphere"/>
 
                 <body name="block_body" euler="0 0 0">
@@ -62,11 +62,13 @@
                         axis="0 1 0"
                         pos="0 0 0.073"
                         range="-0.3 0.3"
-                        frictionloss="0.0001"
                     />
-                    <geom name="body" type="box" pos="0 0 1.0" size=".045 .3 0.9" rgba=".4 .4 1 1" mass="77.8"/>
-                    <site name="ext_body_site" pos="0.049 0 0.456"/>
-                    <site name="flx_body_site" pos="-0.049 0 0.456"/>
+                    <!-- Slender 0.38 m rod (ankle z=0.073 → top z=0.453), near-massless -->
+                    <geom name="body" type="box" pos="0 0 0.263" size=".02 .02 0.19" rgba=".4 .4 1 1" mass="2"/>
+                    <!-- Mass concentrated at the top (disk), 30 kg -->
+                    <geom name="mass_top" type="cylinder" pos="0 0 0.453" size="0.06 0.02" rgba=".9 .3 .3 1" mass="30"/>
+                    <site name="ext_body_site" pos="-0.065 0 0.311"/>
+                    <site name="flx_body_site" pos="0.065 0 0.311"/>
                 </body>
             </body>
         </body>
