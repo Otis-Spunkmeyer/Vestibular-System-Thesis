@@ -13,10 +13,12 @@ angle_log = np.zeros(n_steps)
 for i in range(n_steps):
     body_angle = data.qpos[0]
 
+    # ctrl is BPA tension in N. Flx (ctrl[0]) pulls the ankle negative, so correct a
+    # positive lean by pressurising Flx.
     if body_angle > 0:
-        data.ctrl[0], data.ctrl[1] = 0.0, 0.3
+        data.ctrl[0], data.ctrl[1] = 200.0, 0.0
     else:
-        data.ctrl[0], data.ctrl[1] = 0.3, 0.0
+        data.ctrl[0], data.ctrl[1] = 0.0, 200.0
 
     mujoco.mj_step(model, data)
 
@@ -28,5 +30,5 @@ print(f"Final angle after {n_steps} steps: {angle_log[-1]:.6f} rad ({np.degrees(
 plt.plot(time_log, np.degrees(angle_log))
 plt.xlabel("Time (s)")
 plt.ylabel("Ankle angle (deg)")
-plt.title("Inverted-pendulum ankle stabilized by bilateral Hill muscles")
+plt.title("Inverted-pendulum ankle stabilized by bilateral BPA actuators")
 plt.show()

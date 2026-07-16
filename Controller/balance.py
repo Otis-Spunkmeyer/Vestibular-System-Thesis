@@ -19,7 +19,12 @@ class BalanceSNS():
     def __init__(self):
         pass
 
-def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_wt:float=0.5) -> object:
+def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_wt:float=0.5,
+                 ib_cm:float=4000.0, mult_kp_gs:float=2.2,
+                 mult_kd_gs:float=75.0, mult_kc_gs:float=75.0,
+                 t1_cm:float=0.21, t2_cm:float=8.0,
+                 mult_inter_gs:float=20.0, mult_inter_erev:float=-60.1,
+                 e_lo_mv:float=-60.0, e_hi_mv:float=-40.0) -> object:
 
     """ 
         SNS stability depends on dt, Cm, Gm, g_{max,i}, and ΔE_{s,i} according to
@@ -36,15 +41,34 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
 
         bs_wt (0 to 1) sets the sensory-reweighting split between the graviceptive (bs) and
         proprioceptive (bf) channels feeding the bilateral error neurons (03_err_CCW/15_err_CW),
-        with bf_wt = 1 - bs_wt computed automatically. Both channels currently share the SAME
-        single external input (01_bf_input) and identical neuron dynamics (TH_err_neuron), since
-        the PRTS test protocol injects only one physical signal at this stage. As a direct
-        consequence, bs_wt currently has NO observable effect on network behavior - bf_err_CCW(t)
-        and bs_err_CCW(t) are identical at every instant, so any weighted split of them produces
-        the same combined result (bf_wt + bs_wt always sums to 1). bs_wt will only become
-        behaviorally meaningful once bf and bs receive genuinely distinct signals - e.g. once this
-        network is driven by a real plant/MuJoCo model that distinguishes surface-relative
-        (proprioceptive) sway from gravity-relative (graviceptive) body sway.
+        with bf_wt = 1 - bs_wt computed automatically.
+
+        NOTE (superseded): this docstring used to state that bs_wt has NO observable effect,
+        because bf and bs shared the single external input 01_bf_input. That precondition no
+        longer holds - 37_bs_input is now its own external input (see add_input below), and
+        pso_tuning/model_frf.py drives bf with the surface-relative ankle angle and bs with a
+        complementary-filter body-in-space estimate. Those are the "genuinely distinct signals"
+        the old note said were required, so bs_wt IS now behaviorally live.
+
+        bs_wt IS AMPLITUDE-DEPENDENT - it is not a constant to be set once. It maps directly to
+        Peterka's w_g, with bf_wt = w_p. For the eyes-closed support-surface condition he reports
+        the weights shifting with stimulus amplitude: proprioception dominates for small tilts,
+        graviception takes over for large ones. This sensory reweighting IS Peterka's central
+        result, not a nuisance parameter. The 0.3 seen elsewhere in this repo is his SMALLEST
+        amplitude value, so it is only correct there.
+
+        See pso_tuning/model_frf.py: bs_wt_for(pp_deg), which interpolates w_g from the reported
+        endpoints and is the single place that relationship is defined.
+
+        Reassuringly, the network reproduces the right TREND without being asked: measured on the
+        MuJoCo loop, bs_wt 0.3 -> 0.7 -> 1.0 drops the model gain span from 0.68-1.10 to
+        0.34-0.70 to 0.12-0.37. Higher graviceptive weight -> lower gain is exactly the direction
+        Peterka's amplitude series shows.
+
+        ib_cm sets the membrane capacitance (nF) of the type Ib feedback neurons
+        (25_kt_x_t/26_kt_x_t). With sns-toolbox's default Gm = 1 uS, tau = Cm/Gm, so Cm in nF
+        IS tau in ms. This is NOT a free parameter -- it implements the low-pass on the positive
+        torque feedback. See Implementation note 4 before changing it.
 
         Implementation notes
             The parameter values generally follow those of Hilts, 2018 Thesis with the following exceptions:
@@ -55,8 +79,30 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
             based on trial and error
             3: The membrane capacitance of the gain_interneuron prototype was raised to 5 nF as a workaround 
             for the problem of kp tonic inputs greater than ~9 nA diverging and crashing the simulations.
-            4: The membrane capacitance of the type Ib feedback neurons was lowered to 4000 nF to address the
-            issue of the kt neuron requiring very low tonic inputs and being insensitive to system fluctuations
+            4: The membrane capacitance of the type Ib feedback neurons (ib_cm = 4000.0 nF) was
+               "lowered to 4000 nF to address the issue of the kt neuron requiring very low tonic
+               inputs and being insensitive to system fluctuations".
+               DO NOT reduce this toward a "biologically plausible" 5-20 ms. It is not modelling a
+               membrane; it is IMPLEMENTING Peterka's low-passed positive torque feedback. Hilts
+               2019 sec.III-A: "neurons behave as RC low-pass filters where the cutoff frequency is
+               determined by the membrane capacitance and conductance ... It also is used to filter
+               the positive torque feedback signal." His eq.6 is H_T = Kt*wc/(s + wc) with a fitted
+               wc = 0.209 rad/s (tau = 4.8 s). Gm = 1 uS, so ib_cm = 4000 nF -> tau = 4.0 s ->
+               wc = 0.25 rad/s. That IS the filter, to within the fit.
+               Consequence, and it is intended: the Ib channel is a ~0.04 Hz path, so kt barely
+               moves the response inside the 0.017-0.744 Hz PRTS band. Measured across kt = 0..10:
+               max |delta gain| ~ 0.004-0.016, under 2% of a ~0.9 gain, and in some configurations
+               it rounds to bit-identical. That looks like a dead parameter and is not one --
+               cf. Hilts fig.7, where Kt = 0/0.06/0.1 visibly changes the response only below
+               ~0.1 Hz, consistent with this corner. kt likely acts mostly as a DC operating-point
+               shift, which a mean-subtracted FRF cannot see by construction.
+               If you want to SEE kt work, look below 0.1 Hz or at the operating point -- not at
+               the in-band FRF, and do not reach for ib_cm.
+               (Two mistakes recorded so they are not repeated: a previous version of this note
+               claimed 4000 nF was an ~800x-out-of-biology error that "silently disabled kt", and
+               set ib_cm = 5.0 -- that deleted the H_T filter. The "disabled" evidence was a
+               bit-identical FRF measured at one operating point (bs_wt=0.3); at bs_wt=0 the same
+               ib_cm=4000 network shows kt live. The parameter was never dead.)
             5: The reversal potential of the mult_inter synapse prototype was raised from 60.0 to 60.1 to reflect
             an old workaround that prevented dividing by zero
 
@@ -95,12 +141,12 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     t1_neuron = NonSpikingNeuron(name = 't1',                   # Name displayed in a render of the network
                                     color='blue',               # Fill color for the rendered neuron
                                     resting_potential=-60.0,    # Membrane resting potential in mV
-                                    membrane_capacitance=0.21)   # Membrane capacitance in nF (time constant in AnimatLab)
+                                    membrane_capacitance=t1_cm)  # nF; see t1_cm arg (was 0.21)
 
     t2_gt_t1_neuron = NonSpikingNeuron(name = 't2_gt_t1',       # Name displayed in a render of the network
                                     color='blue',               # Fill color for the rendered neuron
                                     resting_potential=-60.0,    # Membrane resting potential in mV
-                                    membrane_capacitance=8.0)   # Membrane capacitance in nF (time constant in AnimatLab)
+                                    membrane_capacitance=t2_cm)  # nF; see t2_cm arg (was 8.0)
 
     neg_dErr_dt_neuron = NonSpikingNeuron(name = 'neg_dErr_dt', # Name displayed in a render of the network
                                     color='blue',               # Fill color for the rendered neuron
@@ -152,7 +198,7 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     Ib_fdbck_neuron = NonSpikingNeuron(name = 'Ib_fdbck',       # Name displayed in a render of the network
                                     color='blue',               # Fill color for the rendered neuron
                                     resting_potential=-60.0,    # Membrane resting potential in mV
-                                    membrane_capacitance=4000.0) # Membrane capacitance in nF (time constant in AnimatLab)
+                                    membrane_capacitance=ib_cm) # Membrane capacitance in nF (see ib_cm arg)
 
     # PD sum/output neurons
     PD_sum_neuron = NonSpikingNeuron(name = 'PD_sum',           # Name displayed in a render of the network
@@ -164,9 +210,19 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
     Synapse Prototypes
     ==================
     """
-    e_hi = -40
-    e_lo = -60
-    
+    # Synaptic threshold (e_lo) and saturation (e_hi), in mV; the 20 mV operating range
+    # the whole network is designed around (Hilts 2019 sec.III-A).
+    # e_lo == E_r == -60 is a DESIGN IDENTITY, not a coincidence: a synapse driven by a
+    # neuron at rest sits on its threshold and half-wave rectifies. That is exactly how
+    # 06_pos_dErr_dt / 07_neg_dErr_dt split d(err)/dt into its positive and negative
+    # halves, from which the controller forms d = pos - neg and |d| = pos + neg. The
+    # |d| term is the co-activation pathway (McNeal & Hunt eq.1), so the rectification
+    # is the architecture. Measuring the kd path against an ideal linear derivative and
+    # calling the missing ~32 deg a "phase deficit" is measuring the feature.
+    # Exposed as arguments for diagnostics only -- these are not tuning knobs.
+    e_hi = e_hi_mv
+    e_lo = e_lo_mv
+
     # Addition synapses 
     add_syn = NonSpikingSynapse(max_conductance = 0.115,        # Maximum synaptic conductance, g_s, in uS
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
@@ -208,19 +264,19 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
                                 reversal_potential = 134.0)     # Synaptic reversal potential in mV
     
     # gain (multiplication) synapses
-    mult_kp = NonSpikingSynapse(max_conductance = 2.2,          # Maximum synaptic conductance, g_s, in uS
+    mult_kp = NonSpikingSynapse(max_conductance = mult_kp_gs,   # g_s in uS; see mult_kp_gs arg (was 2.2)
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
                                 reversal_potential = 134.0)     # Synaptic reversal potential in mV
 
-    mult_kd = NonSpikingSynapse(max_conductance = 75.0,#54.0         # Maximum synaptic conductance, g_s, in uS
+    mult_kd = NonSpikingSynapse(max_conductance = mult_kd_gs,   # g_s in uS; see mult_kd_gs arg (was 75.0, orig 54.0)
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
                                 reversal_potential = 134.0)     # Synaptic reversal potential in mV
 
-    mult_inter = NonSpikingSynapse(max_conductance = 20.0,      # Maximum synaptic conductance, g_s, in uS
+    mult_inter = NonSpikingSynapse(max_conductance = mult_inter_gs,  # g_s in uS; see mult_inter_gs arg (was 20.0)
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
-                                reversal_potential = -60.1)     # Synaptic reversal potential in mV
+                                reversal_potential = mult_inter_erev)  # mV; see arg (was -60.1, see note 5)
     
-    mult_kc = NonSpikingSynapse(max_conductance = 75.0,#54.0         # Maximum synaptic conductance, g_s, in uS
+    mult_kc = NonSpikingSynapse(max_conductance = mult_kc_gs,   # g_s in uS; see mult_kc_gs arg (was 75.0, orig 54.0)
                                 e_lo=e_lo, e_hi=e_hi,           # Synaptic threshold and saturation in mV
                                 reversal_potential = 134.0)     # Synaptic reversal potential in mV
 
@@ -421,6 +477,15 @@ def generate_sns(gains:tuple, ctrlr_mode:int=3, analysis_outputs:bool=False, bs_
         net.add_output('36_bs_err_CW')
         net.add_output('03_err_CCW')   # combined weighted CCW error neuron
         net.add_output('15_err_CW')    # combined weighted CW error neuron
+
+        # Derivative-circuit taps. Appended last so the indices above stay stable.
+        # Needed to measure the differentiator itself: without these you can only
+        # see 13_kd_x_err, which is AFTER the multiplication, and any phase loss
+        # inside t1/t2 or the pos/neg split is invisible.
+        net.add_output('04_t1')
+        net.add_output('05_t2_gt_t1')
+        net.add_output('06_pos_dErr_dt')
+        net.add_output('07_neg_dErr_dt')
     # net.add_output('02_bf_ref')
 
     # Add outputs for measuring Kp vs Kd

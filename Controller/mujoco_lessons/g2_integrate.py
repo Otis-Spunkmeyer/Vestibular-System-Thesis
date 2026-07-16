@@ -3,11 +3,13 @@ import os
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../pso_tuning'))
 
 import numpy as np
 import mujoco
 import mujoco.viewer
 import balance
+import bpa                        # BPA force model (Bolen et al. 2026)
 
 from prts_generator import generate_prts
 from complementary_filter import ComplementaryFilter
@@ -82,15 +84,19 @@ print(f"300 N → {inputs[2]:.3f} nA (expect  2.000)  [Flx_Ib]")
 
 
 #__ Output adapters_________________________________
-Er = -60.0                      # Neuron resting potential
+# The rig uses BPAs, not Hill muscles, so the SNS output commands PRESSURE (kPa),
+# and BPA tension (N) is computed from tendon length + pressure via bpa.bpa_force.
+# The actuators in e6_bilateral.xml are plain force actuators: data.ctrl is tension in N.
+Er    = -60.0                    # Neuron resting potential
+P_MAX = 620.0                    # kPa: SNS output [Er, Er+R] -> [0, P_MAX] pressure
 
-def v_to_activation(v_mv):
-    return float(np.clip((v_mv - Er) / R, 0.0, 1.0))
+def v_to_pressure(v_mv):
+    return float(np.clip((v_mv - Er) / R, 0.0, 1.0)) * P_MAX
 
 print(f"Output adapter OK — test:")
-print(f"  -60 mV to {v_to_activation(-60.0):.3f}  (expect 0.0, fully relaxed)")
-print(f"  -50 mV to {v_to_activation(-50.0):.3f}  (expect 0.5, half activated)")
-print(f"  -40 mV to {v_to_activation(-40.0):.3f}  (expect 1.0, fully activated)")
+print(f"  -60 mV to {v_to_pressure(-60.0):6.1f} kPa (expect   0.0, deflated)")
+print(f"  -50 mV to {v_to_pressure(-50.0):6.1f} kPa (expect 310.0, half pressure)")
+print(f"  -40 mV to {v_to_pressure(-40.0):6.1f} kPa (expect 620.0, full pressure)")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 n_steps      = len(prts_pos)
@@ -98,10 +104,10 @@ time_log     = np.zeros(n_steps)
 surface_log  = np.zeros(n_steps)   # surface sway (deg)
 ankle_log    = np.zeros(n_steps)   # ankle angle rel. to surface (deg)
 body_abs_log = np.zeros(n_steps)   # absolute body angle in world (deg)
-ctrl_ccw_log = np.zeros(n_steps)   # Flx_muscle activation [0,1]  (ctrl[0])
-ctrl_cw_log  = np.zeros(n_steps)   # Ext_muscle activation [0,1]  (ctrl[1])
-sns_ccw_log  = np.zeros(n_steps)   # SNS extensor output voltage (mV)  (outputs[0])
-sns_cw_log   = np.zeros(n_steps)   # SNS flexor  output voltage (mV)  (outputs[1])
+ctrl_ccw_log = np.zeros(n_steps)   # Flx_bpa tension (N)  (ctrl[0])
+ctrl_cw_log  = np.zeros(n_steps)   # Ext_bpa tension (N)  (ctrl[1])
+sns_ccw_log  = np.zeros(n_steps)   # SNS output[0] voltage (mV) -> Flx pressure
+sns_cw_log   = np.zeros(n_steps)   # SNS output[1] voltage (mV) -> Ext pressure
 
 #__ Simulation ______________________________________
 data.qpos[0] = 0.0   # platform starts flat
@@ -142,9 +148,12 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         # 4. Step SNS
         outputs = sns(inputs)
 
-        # 5. Apply muscle activations
-        data.ctrl[0] = v_to_activation(outputs[1])  # Flx_muscle → flexor  output
-        data.ctrl[1] = v_to_activation(outputs[0])  # Ext_muscle → extensor output
+        # 5. Apply BPA tension (N): SNS output -> pressure -> force from tendon length.
+        # DIRECT mapping (out[0]->Flx, out[1]->Ext). The crossed mapping this script used
+        # to have (out[1]->Flx) is destabilising once the Hill muscle's ~200 N passive
+        # force is gone; see pso_tuning/model_frf.py for the measurement.
+        data.ctrl[0] = bpa.bpa_force(data.actuator_length[0], bpa.LREST, v_to_pressure(outputs[0]))
+        data.ctrl[1] = bpa.bpa_force(data.actuator_length[1], bpa.LREST, v_to_pressure(outputs[1]))
 
         # 6. Step physics
         mujoco.mj_step(model, data)

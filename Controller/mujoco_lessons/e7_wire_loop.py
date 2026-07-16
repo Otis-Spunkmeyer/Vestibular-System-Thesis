@@ -9,15 +9,17 @@ data.qpos[0] = 0.05
 for i in range(2000):
     body_angle = data.qpos[0]
 
-    # Placehodler stand-in for the ral SNS controller output
-    # balance.py would compute these from its network's neuron voltages instead.
+    # Placeholder stand-in for the real SNS controller output. balance.py would compute
+    # these from its network's neuron voltages instead. ctrl is now BPA TENSION in N
+    # (the actuators are force actuators). Flx (ctrl[0]) pulls the ankle negative, so a
+    # positive lean is corrected by pressurising Flx.
     if body_angle > 0:
-        ccw_activation, cw_activation = 0.0, 0.3
+        flx_force, ext_force = 200.0, 0.0
     else:
-        ccw_activation, cw_activation = 0.3, 0.0
+        flx_force, ext_force = 0.0, 200.0
 
-    data.ctrl[0] = ccw_activation
-    data.ctrl[1] = cw_activation
+    data.ctrl[0] = flx_force
+    data.ctrl[1] = ext_force
 
     mujoco.mj_step(model, data)
 

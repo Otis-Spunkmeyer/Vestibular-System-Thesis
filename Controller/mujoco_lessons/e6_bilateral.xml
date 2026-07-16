@@ -15,9 +15,6 @@
     <default>
         <camera pos="-2.945 -4.387 2.734" xyaxes="0.838 -0.545 0.000 0.163 0.251 0.954"/>
         <tendon width="0.01" rgba="0.8 0.2 0.2 1"/>
-        <default class="muscle">
-            <muscle ctrllimited="true" ctrlrange="0 1" force="1300"/>
-        </default>
     </default>
 
     <worldbody>
@@ -56,6 +53,27 @@
                 <site name="foot_glue" pos="0 0 -0.00395" size="0.01" type="sphere"/>
 
                 <body name="block_body" euler="0 0 0">
+                    <!--
+                      NO passive stiffness or damping. The rig is an inverted pendulum with
+                      mgh = 115.6 N*m/rad, J = 4.46 kg*m^2, fall time tau_p = sqrt(J/mgh) = 0.196 s.
+                      It is intended to be UNSTABLE (Peterka's paradigm): the SNS must actively
+                      balance it, with no passive help.
+
+                      This rig is driven by Festo phi10mm braided pneumatic actuators (BPAs), NOT
+                      Hill muscles. A deflated BPA produces ~0 N, so there is no passive muscle
+                      stiffness -- the only joint stiffness comes from actively pressurising the
+                      antagonist pair (co-contraction). The actuators below are therefore plain
+                      force actuators; the BPA force-length-pressure law lives in pso_tuning/bpa.py
+                      and is applied per step by the control loop.
+
+                      (History: a 69.4 N*m/rad torsion spring was briefly added here as a passive
+                      stiffness proxy. It was removed once the BPA model showed the real rig has no
+                      passive stiffness. If the unstable plant proves unstabilisable, the agreed
+                      next step is a tonic co-contraction PRESSURE bias -- not a spring.)
+
+                      damping stays 0: the physical rig has only small frictional forces, currently
+                      unmeasured. Put a value here if they are ever characterised.
+                    -->
                     <joint
                         name="ankle_joint"
                         type="hinge"
@@ -98,10 +116,19 @@
     </tendon>
 
     <actuator>
-        <!-- ctrl[0] = Flx_muscle (flexor / tibialis anterior) -->
-        <muscle name="Flx_muscle" tendon="Flx_tendon" class="muscle"/>
-        <!-- ctrl[1] = Ext_muscle (extensor / gastrocnemius) -->
-        <muscle name="Ext_muscle" tendon="Ext_tendon" class="muscle"/>
+        <!--
+          BPA force actuators. ctrl is tendon TENSION IN NEWTONS (not 0-1 activation).
+          gaintype=fixed, gainprm=1 so d.actuator_force = d.ctrl; d.actuator_length is the
+          tendon length. The control loop computes BPA tension from tendon length + commanded
+          pressure via pso_tuning/bpa.py and writes it here. Pulling-only, so ctrl >= 0.
+          ctrlrange upper bound 500 N covers the phi10mm max (~418 N at 620 kPa) with headroom.
+        -->
+        <!-- ctrl[0] = Flx_bpa (flexor / tibialis anterior) -->
+        <general name="Flx_bpa" tendon="Flx_tendon" gaintype="fixed" gainprm="1"
+                 biastype="none" ctrllimited="true" ctrlrange="0 500"/>
+        <!-- ctrl[1] = Ext_bpa (extensor / gastrocnemius) -->
+        <general name="Ext_bpa" tendon="Ext_tendon" gaintype="fixed" gainprm="1"
+                 biastype="none" ctrllimited="true" ctrlrange="0 500"/>
     </actuator>
 
     <sensor>
